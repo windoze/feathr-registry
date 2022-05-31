@@ -1,12 +1,8 @@
 use std::collections::HashMap;
 
 use common_utils::FlippedOptionResult;
-use poem_openapi::{Object, Union};
-use registry_provider::{
-    AnchorAttributes, AnchorFeatureAttributes, DerivedFeatureAttributes, EdgeProperty, EdgeType,
-    Entity, EntityProperty, EntityRef, FeatureTransformation, FeatureType, ProjectAttributes,
-    SourceAttributes, TensorCategory, TypedKey, ValueType, VectorType,
-};
+use poem_openapi::{Enum, Object, Union};
+use registry_provider::{EdgeProperty, EntityProperty};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -21,11 +17,11 @@ pub struct EntityResponseItem {
     pub name: String,
 }
 
-impl<Prop> From<Entity<Prop>> for EntityResponseItem
+impl<Prop> From<registry_provider::Entity<Prop>> for EntityResponseItem
 where
     Prop: Clone + std::fmt::Debug + PartialEq + Eq,
 {
-    fn from(e: Entity<Prop>) -> Self {
+    fn from(e: registry_provider::Entity<Prop>) -> Self {
         Self {
             id: e.id.to_string(),
             qualified_name: e.qualified_name,
@@ -35,41 +31,30 @@ where
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
-pub struct EntitiesResponse {
+pub struct Entities {
     pub entities: Vec<EntityResponseItem>,
 }
 
-impl FromIterator<Entity<EntityProperty>> for EntitiesResponse {
-    fn from_iter<T: IntoIterator<Item = Entity<EntityProperty>>>(iter: T) -> Self {
+impl FromIterator<registry_provider::Entity<EntityProperty>> for Entities {
+    fn from_iter<T: IntoIterator<Item = registry_provider::Entity<EntityProperty>>>(
+        iter: T,
+    ) -> Self {
         Self {
             entities: iter.into_iter().map(|e| e.into()).collect(),
         }
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct SearchParams {
-    pub keyword: String,
-    pub size: Option<usize>,
-    pub offset: Option<usize>,
-}
-
-impl SearchParams {
-    pub fn is_empty(&self) -> bool {
-        self.keyword.is_empty()
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
-pub struct EntityRefResponse {
+pub struct EntityRef {
     guid: String,
     type_name: String,
     unique_attributes: HashMap<String, String>,
 }
 
-impl From<EntityRef> for EntityRefResponse {
-    fn from(v: EntityRef) -> Self {
+impl From<registry_provider::EntityRef> for EntityRef {
+    fn from(v: registry_provider::EntityRef) -> Self {
         Self {
             guid: v.guid.to_string(),
             type_name: v.type_name,
@@ -78,11 +63,11 @@ impl From<EntityRef> for EntityRefResponse {
     }
 }
 
-impl TryInto<EntityRef> for EntityRefResponse {
+impl TryInto<registry_provider::EntityRef> for EntityRef {
     type Error = ApiError;
 
-    fn try_into(self) -> Result<EntityRef, Self::Error> {
-        Ok(EntityRef {
+    fn try_into(self) -> Result<registry_provider::EntityRef, Self::Error> {
+        Ok(registry_provider::EntityRef {
             guid: parse_uuid(&self.guid)?,
             type_name: self.type_name,
             unique_attributes: self.unique_attributes,
@@ -92,18 +77,18 @@ impl TryInto<EntityRef> for EntityRefResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
-pub struct ProjectAttributesResponse {
+pub struct ProjectAttributes {
     pub qualified_name: String,
     pub name: String,
-    pub anchors: Vec<EntityRefResponse>,
-    pub sources: Vec<EntityRefResponse>,
-    pub anchor_features: Vec<EntityRefResponse>,
-    pub derived_features: Vec<EntityRefResponse>,
+    pub anchors: Vec<EntityRef>,
+    pub sources: Vec<EntityRef>,
+    pub anchor_features: Vec<EntityRef>,
+    pub derived_features: Vec<EntityRef>,
     pub tags: HashMap<String, String>,
 }
 
-impl From<ProjectAttributes> for ProjectAttributesResponse {
-    fn from(v: ProjectAttributes) -> Self {
+impl From<registry_provider::ProjectAttributes> for ProjectAttributes {
+    fn from(v: registry_provider::ProjectAttributes) -> Self {
         Self {
             qualified_name: v.qualified_name,
             name: v.name,
@@ -116,11 +101,11 @@ impl From<ProjectAttributes> for ProjectAttributesResponse {
     }
 }
 
-impl TryInto<ProjectAttributes> for ProjectAttributesResponse {
+impl TryInto<registry_provider::ProjectAttributes> for ProjectAttributes {
     type Error = ApiError;
 
-    fn try_into(self) -> Result<ProjectAttributes, Self::Error> {
-        Ok(ProjectAttributes {
+    fn try_into(self) -> Result<registry_provider::ProjectAttributes, Self::Error> {
+        Ok(registry_provider::ProjectAttributes {
             qualified_name: self.qualified_name,
             name: self.name,
             anchors: self
@@ -149,7 +134,8 @@ impl TryInto<ProjectAttributes> for ProjectAttributesResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Object)]
-pub struct SourceAttributesResponse {
+#[oai(rename_all = "camelCase")]
+pub struct SourceAttributes {
     pub qualified_name: String,
     pub name: String,
     pub path: String,
@@ -164,8 +150,8 @@ pub struct SourceAttributesResponse {
     pub tags: HashMap<String, String>,
 }
 
-impl From<SourceAttributes> for SourceAttributesResponse {
-    fn from(v: SourceAttributes) -> Self {
+impl From<registry_provider::SourceAttributes> for SourceAttributes {
+    fn from(v: registry_provider::SourceAttributes) -> Self {
         Self {
             qualified_name: v.qualified_name,
             name: v.name,
@@ -179,11 +165,11 @@ impl From<SourceAttributes> for SourceAttributesResponse {
     }
 }
 
-impl TryInto<SourceAttributes> for SourceAttributesResponse {
+impl TryInto<registry_provider::SourceAttributes> for SourceAttributes {
     type Error = ApiError;
 
-    fn try_into(self) -> Result<SourceAttributes, Self::Error> {
-        Ok(SourceAttributes {
+    fn try_into(self) -> Result<registry_provider::SourceAttributes, Self::Error> {
+        Ok(registry_provider::SourceAttributes {
             qualified_name: self.qualified_name,
             name: self.name,
             path: self.path,
@@ -197,18 +183,18 @@ impl TryInto<SourceAttributes> for SourceAttributesResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Object)]
-pub struct AnchorAttributesResponse {
-    #[oai(rename = "qualifiedName")]
+#[oai(rename_all = "camelCase")]
+pub struct AnchorAttributes {
     pub qualified_name: String,
     pub name: String,
-    pub features: Vec<EntityRefResponse>,
+    pub features: Vec<EntityRef>,
     #[oai(skip_serializing_if = "Option::is_none")]
-    pub source: Option<EntityRefResponse>,
+    pub source: Option<EntityRef>,
     pub tags: HashMap<String, String>,
 }
 
-impl From<AnchorAttributes> for AnchorAttributesResponse {
-    fn from(v: AnchorAttributes) -> Self {
+impl From<registry_provider::AnchorAttributes> for AnchorAttributes {
+    fn from(v: registry_provider::AnchorAttributes) -> Self {
         Self {
             qualified_name: v.qualified_name,
             name: v.name,
@@ -219,11 +205,11 @@ impl From<AnchorAttributes> for AnchorAttributesResponse {
     }
 }
 
-impl TryInto<AnchorAttributes> for AnchorAttributesResponse {
+impl TryInto<registry_provider::AnchorAttributes> for AnchorAttributes {
     type Error = ApiError;
 
-    fn try_into(self) -> Result<AnchorAttributes, Self::Error> {
-        Ok(AnchorAttributes {
+    fn try_into(self) -> Result<registry_provider::AnchorAttributes, Self::Error> {
+        Ok(registry_provider::AnchorAttributes {
             qualified_name: self.qualified_name,
             name: self.name,
             features: self
@@ -238,18 +224,19 @@ impl TryInto<AnchorAttributes> for AnchorAttributesResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Object)]
-pub struct AnchorFeatureAttributesResponse {
+#[oai(rename_all = "camelCase")]
+pub struct AnchorFeatureAttributes {
     pub qualified_name: String,
     pub name: String,
     #[oai(rename = "type")]
-    pub type_: FeatureTypeDef,
-    pub transformation: FeatureTransformationDef,
-    pub key: Vec<TypedKeyDef>,
+    pub type_: FeatureType,
+    pub transformation: FeatureTransformation,
+    pub key: Vec<TypedKey>,
     pub tags: HashMap<String, String>,
 }
 
-impl From<AnchorFeatureAttributes> for AnchorFeatureAttributesResponse {
-    fn from(v: AnchorFeatureAttributes) -> Self {
+impl From<registry_provider::AnchorFeatureAttributes> for AnchorFeatureAttributes {
+    fn from(v: registry_provider::AnchorFeatureAttributes) -> Self {
         Self {
             qualified_name: v.qualified_name,
             name: v.name,
@@ -262,21 +249,22 @@ impl From<AnchorFeatureAttributes> for AnchorFeatureAttributesResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Object)]
-pub struct DerivedFeatureAttributesResponse {
+#[oai(rename_all = "camelCase")]
+pub struct DerivedFeatureAttributes {
     #[oai(rename = "qualifiedName")]
     pub qualified_name: String,
     pub name: String,
     #[oai(rename = "type")]
-    pub type_: FeatureTypeDef,
-    pub transformation: FeatureTransformationDef,
-    pub key: Vec<TypedKeyDef>,
-    pub input_anchor_features: Vec<EntityRefResponse>,
-    pub input_derived_features: Vec<EntityRefResponse>,
+    pub type_: FeatureType,
+    pub transformation: FeatureTransformation,
+    pub key: Vec<TypedKey>,
+    pub input_anchor_features: Vec<EntityRef>,
+    pub input_derived_features: Vec<EntityRef>,
     pub tags: HashMap<String, String>,
 }
 
-impl From<DerivedFeatureAttributes> for DerivedFeatureAttributesResponse {
-    fn from(v: DerivedFeatureAttributes) -> Self {
+impl From<registry_provider::DerivedFeatureAttributes> for DerivedFeatureAttributes {
+    fn from(v: registry_provider::DerivedFeatureAttributes) -> Self {
         Self {
             qualified_name: v.qualified_name,
             name: v.name,
@@ -300,11 +288,11 @@ impl From<DerivedFeatureAttributes> for DerivedFeatureAttributesResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Union)]
 pub enum EntityAttributes {
-    Project(ProjectAttributesResponse),
-    Source(SourceAttributesResponse),
-    Anchor(AnchorAttributesResponse),
-    AnchorFeature(AnchorFeatureAttributesResponse),
-    DerivedFeature(DerivedFeatureAttributesResponse),
+    Project(ProjectAttributes),
+    Source(SourceAttributes),
+    Anchor(AnchorAttributes),
+    AnchorFeature(AnchorFeatureAttributes),
+    DerivedFeature(DerivedFeatureAttributes),
 }
 
 impl From<registry_provider::Attributes> for EntityAttributes {
@@ -320,7 +308,8 @@ impl From<registry_provider::Attributes> for EntityAttributes {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Object)]
-pub struct EntityResponse {
+#[oai(rename_all = "camelCase")]
+pub struct Entity {
     pub guid: String,
     #[oai(rename = "lastModifiedTS")]
     pub last_modified_ts: String,
@@ -334,7 +323,7 @@ pub struct EntityResponse {
     pub attributes: EntityAttributes,
 }
 
-impl From<EntityProperty> for EntityResponse {
+impl From<EntityProperty> for Entity {
     fn from(v: EntityProperty) -> Self {
         Self {
             guid: v.guid.to_string(),
@@ -351,23 +340,53 @@ impl From<EntityProperty> for EntityResponse {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Enum)]
+pub enum EdgeType {
+    BelongsTo,
+    Contains,
+    Consumes,
+    Produces,
+}
+
+impl From<registry_provider::EdgeType> for EdgeType {
+    fn from(v: registry_provider::EdgeType) -> Self {
+        match v {
+            registry_provider::EdgeType::BelongsTo => EdgeType::BelongsTo,
+            registry_provider::EdgeType::Contains => EdgeType::Contains,
+            registry_provider::EdgeType::Consumes => EdgeType::Consumes,
+            registry_provider::EdgeType::Produces => EdgeType::Produces,
+        }
+    }
+}
+
+impl Into<registry_provider::EdgeType> for EdgeType {
+    fn into(self) -> registry_provider::EdgeType {
+        match self {
+            EdgeType::BelongsTo => registry_provider::EdgeType::BelongsTo,
+            EdgeType::Contains => registry_provider::EdgeType::Contains,
+            EdgeType::Consumes => registry_provider::EdgeType::Consumes,
+            EdgeType::Produces => registry_provider::EdgeType::Produces,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Object)]
-pub struct EdgeResponse {
+pub struct Relationship {
     #[oai(rename = "relationshipId")]
     pub guid: String,
     #[oai(rename = "relationshipType")]
-    pub edge_type: String,
+    pub edge_type: EdgeType,
     #[oai(rename = "fromEntityId")]
     pub from: String,
     #[oai(rename = "toEntityId")]
     pub to: String,
 }
 
-impl From<EdgeProperty> for EdgeResponse {
+impl From<EdgeProperty> for Relationship {
     fn from(v: EdgeProperty) -> Self {
         Self {
             guid: v.guid.to_string(),
-            edge_type: format!("{:?}", v.edge_type),
+            edge_type: v.edge_type.into(),
             from: v.from.to_string(),
             to: v.to.to_string(),
         }
@@ -378,55 +397,107 @@ fn parse_uuid(s: &str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(s).map_err(|_| ApiError::BadRequest(format!("Invalid GUID `{}`", s)))
 }
 
-fn parse_edge_type(s: &str) -> Result<EdgeType, ApiError> {
-    match s {
-        "Contains" => Ok(EdgeType::Contains),
-        "BelongsTo" => Ok(EdgeType::BelongsTo),
-        "Consumes" => Ok(EdgeType::Consumes),
-        "Produces" => Ok(EdgeType::Produces),
-        _ => Err(ApiError::BadRequest(format!("Invalid EdgeType `{}`", s))),
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Enum)]
+pub enum ValueType {
+    #[serde(alias = "0")]
+    UNSPECIFIED,
+    #[serde(rename = "BOOLEAN", alias = "1")]
+    BOOL,
+    #[serde(rename = "INT", alias = "2")]
+    INT32,
+    #[serde(rename = "LONG", alias = "3")]
+    INT64,
+    #[serde(alias = "4")]
+    FLOAT,
+    #[serde(alias = "5")]
+    DOUBLE,
+    #[serde(alias = "6")]
+    STRING,
+    #[serde(alias = "7")]
+    BYTES,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Enum)]
+pub enum VectorType {
+    TENSOR,
+}
+
+impl From<registry_provider::VectorType> for VectorType {
+    fn from(_: registry_provider::VectorType) -> Self {
+        VectorType::TENSOR
     }
 }
 
-fn parse_vector_type(s: &str) -> Result<VectorType, ApiError> {
-    match s {
-        "TENSOR" => Ok(VectorType::TENSOR),
-        _ => Err(ApiError::BadRequest(format!("Invalid VectorType `{}`", s))),
+impl Into<registry_provider::VectorType> for VectorType {
+    fn into(self) -> registry_provider::VectorType {
+        registry_provider::VectorType::TENSOR
     }
 }
 
-fn parse_tensor_category(s: &str) -> Result<TensorCategory, ApiError> {
-    match s {
-        "DENSE" => Ok(TensorCategory::DENSE),
-        "SPARSE" => Ok(TensorCategory::SPARSE),
-        _ => Err(ApiError::BadRequest(format!(
-            "Invalid TensorCategory `{}`",
-            s
-        ))),
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Enum)]
+pub enum TensorCategory {
+    DENSE,
+    SPARSE,
+}
+
+impl From<registry_provider::TensorCategory> for TensorCategory {
+    fn from(v: registry_provider::TensorCategory) -> Self {
+        match v {
+            registry_provider::TensorCategory::DENSE => TensorCategory::DENSE,
+            registry_provider::TensorCategory::SPARSE => TensorCategory::SPARSE,
+        }
     }
 }
 
-fn parse_value_type(s: &str) -> Result<ValueType, ApiError> {
-    match s {
-        "UNSPECIFIED" | "0" => Ok(ValueType::BOOL),
-        "BOOL" | "BOOLEAN" | "1" => Ok(ValueType::BOOL),
-        "INT32" | "INT" | "2" => Ok(ValueType::INT32),
-        "INT64" | "LONG" | "3" => Ok(ValueType::INT64),
-        "FLOAT" | "4" => Ok(ValueType::FLOAT),
-        "DOUBLE" | "5" => Ok(ValueType::DOUBLE),
-        "STRING" | "6" => Ok(ValueType::STRING),
-        "BYTES" | "7" => Ok(ValueType::BYTES),
-        _ => Err(ApiError::BadRequest(format!("Invalid ValueType `{}`", s))),
+impl Into<registry_provider::TensorCategory> for TensorCategory {
+    fn into(self) -> registry_provider::TensorCategory {
+        match self {
+            TensorCategory::DENSE => registry_provider::TensorCategory::DENSE,
+            TensorCategory::SPARSE => registry_provider::TensorCategory::SPARSE,
+        }
     }
 }
 
-impl TryInto<EdgeProperty> for EdgeResponse {
+impl From<registry_provider::ValueType> for ValueType {
+    fn from(v: registry_provider::ValueType) -> Self {
+        match v {
+            registry_provider::ValueType::UNSPECIFIED => Self::UNSPECIFIED,
+            registry_provider::ValueType::BOOL => Self::BOOL,
+            registry_provider::ValueType::INT32 => Self::INT32,
+            registry_provider::ValueType::INT64 => Self::INT32,
+            registry_provider::ValueType::FLOAT => Self::FLOAT,
+            registry_provider::ValueType::DOUBLE => Self::DOUBLE,
+            registry_provider::ValueType::STRING => Self::STRING,
+            registry_provider::ValueType::BYTES => Self::BYTES,
+        }
+    }
+}
+
+impl Into<registry_provider::ValueType> for ValueType {
+    fn into(self) -> registry_provider::ValueType {
+        match self {
+            ValueType::UNSPECIFIED => registry_provider::ValueType::UNSPECIFIED,
+            ValueType::BOOL => registry_provider::ValueType::BOOL,
+            ValueType::INT32 => registry_provider::ValueType::INT32,
+            ValueType::INT64 => registry_provider::ValueType::INT64,
+            ValueType::FLOAT => registry_provider::ValueType::FLOAT,
+            ValueType::DOUBLE => registry_provider::ValueType::DOUBLE,
+            ValueType::STRING => registry_provider::ValueType::STRING,
+            ValueType::BYTES => registry_provider::ValueType::BYTES,
+        }
+    }
+}
+
+impl TryInto<EdgeProperty> for Relationship {
     type Error = ApiError;
 
     fn try_into(self) -> Result<EdgeProperty, Self::Error> {
         Ok(EdgeProperty {
             guid: parse_uuid(&self.guid)?,
-            edge_type: parse_edge_type(&self.edge_type)?,
+            edge_type: self.edge_type.into(),
             from: parse_uuid(&self.from)?,
             to: parse_uuid(&self.to)?,
         })
@@ -434,14 +505,16 @@ impl TryInto<EdgeProperty> for EdgeResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Object)]
-pub struct FeatureLineageResponse {
+#[oai(rename_all = "camelCase")]
+pub struct EntityLineage {
     #[serde(rename = "guidEntityMap")]
-    pub guid_entity_map: HashMap<String, EntityResponse>,
-    pub relations: Vec<EdgeResponse>,
+    pub guid_entity_map: HashMap<String, Entity>,
+    pub relations: Vec<Relationship>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[serde(rename_all = "camelCase")]
+#[oai(rename_all = "camelCase")]
 pub struct ProjectDef {
     pub qualified_name: String,
     pub tags: HashMap<String, String>,
@@ -458,7 +531,7 @@ impl TryInto<registry_provider::ProjectDef> for ProjectDef {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceDef {
     pub name: String,
@@ -489,7 +562,7 @@ impl TryInto<registry_provider::SourceDef> for SourceDef {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[serde(rename_all = "camelCase")]
 pub struct AnchorDef {
     pub name: String,
@@ -511,52 +584,45 @@ impl TryInto<registry_provider::AnchorDef> for AnchorDef {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Object)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
-pub struct FeatureTypeDef {
+pub struct FeatureType {
     #[oai(rename = "type")]
-    pub type_: String,
-    pub tensor_category: String,
-    pub dimension_type: Vec<String>,
-    pub val_type: String,
+    pub type_: VectorType,
+    pub tensor_category: TensorCategory,
+    pub dimension_type: Vec<ValueType>,
+    pub val_type: ValueType,
 }
 
-impl TryInto<registry_provider::FeatureType> for FeatureTypeDef {
+impl TryInto<registry_provider::FeatureType> for FeatureType {
     type Error = ApiError;
 
     fn try_into(self) -> Result<registry_provider::FeatureType, Self::Error> {
         Ok(registry_provider::FeatureType {
-            type_: parse_vector_type(&self.type_)?,
-            tensor_category: parse_tensor_category(&self.tensor_category)?,
-            dimension_type: self
-                .dimension_type
-                .into_iter()
-                .map(|e| parse_value_type(&e))
-                .collect::<Result<_, _>>()?,
-            val_type: parse_value_type(&self.val_type)?,
+            type_: self.type_.into(),
+            tensor_category: self.tensor_category.into(),
+            dimension_type: self.dimension_type.into_iter().map(|e| e.into()).collect(),
+            val_type: self.val_type.into(),
         })
     }
 }
 
-impl From<FeatureType> for FeatureTypeDef {
-    fn from(v: FeatureType) -> Self {
+impl From<registry_provider::FeatureType> for FeatureType {
+    fn from(v: registry_provider::FeatureType) -> Self {
         Self {
-            type_: format!("{:?}", v.type_),
-            tensor_category: format!("{:?}", v.tensor_category),
-            dimension_type: v
-                .dimension_type
-                .into_iter()
-                .map(|e| format!("{:?}", e))
-                .collect(),
-            val_type: format!("{:?}", v.val_type),
+            type_: v.type_.into(),
+            tensor_category: v.tensor_category.into(),
+            dimension_type: v.dimension_type.into_iter().map(|e| e.into()).collect(),
+            val_type: v.val_type.into(),
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Object)]
-pub struct TypedKeyDef {
+#[oai(rename_all = "camelCase")]
+pub struct TypedKey {
     pub key_column: String,
-    pub key_column_type: String,
+    pub key_column_type: ValueType,
     #[oai(skip_serializing_if = "Option::is_none")]
     pub full_name: Option<String>,
     #[oai(skip_serializing_if = "Option::is_none")]
@@ -565,11 +631,11 @@ pub struct TypedKeyDef {
     pub key_column_alias: Option<String>,
 }
 
-impl From<TypedKey> for TypedKeyDef {
-    fn from(v: TypedKey) -> Self {
+impl From<registry_provider::TypedKey> for TypedKey {
+    fn from(v: registry_provider::TypedKey) -> Self {
         Self {
             key_column: v.key_column,
-            key_column_type: format!("{:?}", v.key_column_type),
+            key_column_type: v.key_column_type.into(),
             full_name: v.full_name,
             description: v.description,
             key_column_alias: v.key_column_alias,
@@ -577,13 +643,13 @@ impl From<TypedKey> for TypedKeyDef {
     }
 }
 
-impl TryInto<TypedKey> for TypedKeyDef {
+impl TryInto<registry_provider::TypedKey> for TypedKey {
     type Error = ApiError;
 
-    fn try_into(self) -> Result<TypedKey, Self::Error> {
-        Ok(TypedKey {
+    fn try_into(self) -> Result<registry_provider::TypedKey, Self::Error> {
+        Ok(registry_provider::TypedKey {
             key_column: self.key_column,
-            key_column_type: parse_value_type(&self.key_column_type)?,
+            key_column_type: self.key_column_type.into(),
             full_name: self.full_name,
             description: self.description,
             key_column_alias: self.key_column_alias,
@@ -591,12 +657,69 @@ impl TryInto<TypedKey> for TypedKeyDef {
     }
 }
 
+#[allow(non_camel_case_types)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Enum)]
+pub enum Aggregation {
+    // No operation
+    NOP,
+    // Average
+    AVG,
+    MAX,
+    MIN,
+    SUM,
+    UNION,
+    // Element-wise average, typically used in array type value, i.e. 1d dense tensor
+    ELEMENTWISE_AVG,
+    ELEMENTWISE_MIN,
+    ELEMENTWISE_MAX,
+    ELEMENTWISE_SUM,
+    // Pick the latest value according to its timestamp
+    LATEST,
+}
+
+impl From<registry_provider::Aggregation> for Aggregation {
+    fn from(v: registry_provider::Aggregation) -> Self {
+        match v {
+            registry_provider::Aggregation::NOP => Aggregation::NOP,
+            registry_provider::Aggregation::AVG => Aggregation::AVG,
+            registry_provider::Aggregation::MAX => Aggregation::MAX,
+            registry_provider::Aggregation::MIN => Aggregation::MIN,
+            registry_provider::Aggregation::SUM => Aggregation::SUM,
+            registry_provider::Aggregation::UNION => Aggregation::UNION,
+            registry_provider::Aggregation::ELEMENTWISE_AVG => Aggregation::ELEMENTWISE_AVG,
+            registry_provider::Aggregation::ELEMENTWISE_MIN => Aggregation::ELEMENTWISE_MIN,
+            registry_provider::Aggregation::ELEMENTWISE_MAX => Aggregation::ELEMENTWISE_MAX,
+            registry_provider::Aggregation::ELEMENTWISE_SUM => Aggregation::ELEMENTWISE_SUM,
+            registry_provider::Aggregation::LATEST => Aggregation::LATEST,
+        }
+    }
+}
+
+impl Into<registry_provider::Aggregation> for Aggregation {
+    fn into(self) -> registry_provider::Aggregation {
+        match self {
+            Aggregation::NOP => registry_provider::Aggregation::NOP,
+            Aggregation::AVG => registry_provider::Aggregation::AVG,
+            Aggregation::MAX => registry_provider::Aggregation::MAX,
+            Aggregation::MIN => registry_provider::Aggregation::MIN,
+            Aggregation::SUM => registry_provider::Aggregation::SUM,
+            Aggregation::UNION => registry_provider::Aggregation::UNION,
+            Aggregation::ELEMENTWISE_AVG => registry_provider::Aggregation::ELEMENTWISE_AVG,
+            Aggregation::ELEMENTWISE_MIN => registry_provider::Aggregation::ELEMENTWISE_MIN,
+            Aggregation::ELEMENTWISE_MAX => registry_provider::Aggregation::ELEMENTWISE_MAX,
+            Aggregation::ELEMENTWISE_SUM => registry_provider::Aggregation::ELEMENTWISE_SUM,
+            Aggregation::LATEST => registry_provider::Aggregation::LATEST,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Object)]
-pub struct FeatureTransformationDef {
+#[oai(rename_all = "camelCase")]
+pub struct FeatureTransformation {
     #[oai(skip_serializing_if = "Option::is_none")]
     def_expr: Option<String>,
     #[oai(skip_serializing_if = "Option::is_none")]
-    agg_func: Option<String>,
+    agg_func: Option<Aggregation>,
     #[oai(skip_serializing_if = "Option::is_none")]
     window: Option<String>,
     #[oai(skip_serializing_if = "Option::is_none")]
@@ -611,18 +734,18 @@ pub struct FeatureTransformationDef {
     name: Option<String>,
 }
 
-impl TryInto<FeatureTransformation> for FeatureTransformationDef {
+impl TryInto<registry_provider::FeatureTransformation> for FeatureTransformation {
     type Error = ApiError;
 
-    fn try_into(self) -> Result<FeatureTransformation, Self::Error> {
+    fn try_into(self) -> Result<registry_provider::FeatureTransformation, Self::Error> {
         Ok(match self.transform_expr {
-            Some(s) => FeatureTransformation::Expression { transform_expr: s },
+            Some(s) => registry_provider::FeatureTransformation::Expression { transform_expr: s },
             None => match self.name {
-                Some(s) => FeatureTransformation::Udf { name: s },
+                Some(s) => registry_provider::FeatureTransformation::Udf { name: s },
                 None => match self.def_expr {
-                    Some(s) => FeatureTransformation::WindowAgg {
+                    Some(s) => registry_provider::FeatureTransformation::WindowAgg {
                         def_expr: s,
-                        agg_func: self.agg_func,
+                        agg_func: self.agg_func.map(|a| a.into()),
                         window: self.window,
                         group_by: self.group_by,
                         filter: self.filter,
@@ -639,14 +762,14 @@ impl TryInto<FeatureTransformation> for FeatureTransformationDef {
     }
 }
 
-impl From<FeatureTransformation> for FeatureTransformationDef {
-    fn from(v: FeatureTransformation) -> Self {
+impl From<registry_provider::FeatureTransformation> for FeatureTransformation {
+    fn from(v: registry_provider::FeatureTransformation) -> Self {
         match v {
-            FeatureTransformation::Expression { transform_expr } => Self {
+            registry_provider::FeatureTransformation::Expression { transform_expr } => Self {
                 transform_expr: Some(transform_expr),
                 ..Default::default()
             },
-            FeatureTransformation::WindowAgg {
+            registry_provider::FeatureTransformation::WindowAgg {
                 def_expr,
                 agg_func,
                 window,
@@ -655,14 +778,14 @@ impl From<FeatureTransformation> for FeatureTransformationDef {
                 limit,
             } => Self {
                 def_expr: Some(def_expr),
-                agg_func,
+                agg_func: agg_func.map(|a| a.into()),
                 window,
                 group_by,
                 filter,
                 limit,
                 ..Default::default()
             },
-            FeatureTransformation::Udf { name } => Self {
+            registry_provider::FeatureTransformation::Udf { name } => Self {
                 name: Some(name),
                 ..Default::default()
             },
@@ -672,12 +795,13 @@ impl From<FeatureTransformation> for FeatureTransformationDef {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[serde(rename_all = "camelCase")]
+#[oai(rename_all = "camelCase")]
 pub struct AnchorFeatureDef {
     pub name: String,
     pub qualified_name: String,
-    pub feature_type: FeatureTypeDef,
-    pub transformation: FeatureTransformationDef,
-    pub key: Vec<TypedKeyDef>,
+    pub feature_type: FeatureType,
+    pub transformation: FeatureTransformation,
+    pub key: Vec<TypedKey>,
     pub tags: HashMap<String, String>,
 }
 
@@ -702,12 +826,13 @@ impl TryInto<registry_provider::AnchorFeatureDef> for AnchorFeatureDef {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[serde(rename_all = "camelCase")]
+#[oai(rename_all = "camelCase")]
 pub struct DerivedFeatureDef {
     pub name: String,
     pub qualified_name: String,
-    pub feature_type: FeatureTypeDef,
-    pub transformation: FeatureTransformationDef,
-    pub key: Vec<TypedKeyDef>,
+    pub feature_type: FeatureType,
+    pub transformation: FeatureTransformation,
+    pub key: Vec<TypedKey>,
     pub input_anchor_features: Vec<String>,
     pub input_derived_features: Vec<String>,
     pub tags: HashMap<String, String>,

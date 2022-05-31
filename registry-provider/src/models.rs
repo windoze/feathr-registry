@@ -147,6 +147,26 @@ pub struct TypedKey {
     pub key_column_alias: Option<String>,
 }
 
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Aggregation {
+    // No operation
+    NOP,
+    // Average
+    AVG,
+    MAX,
+    MIN,
+    SUM,
+    UNION,
+    // Element-wise average, typically used in array type value, i.e. 1d dense tensor
+    ELEMENTWISE_AVG,
+    ELEMENTWISE_MIN,
+    ELEMENTWISE_MAX,
+    ELEMENTWISE_SUM,
+    // Pick the latest value according to its timestamp
+    LATEST,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FeatureTransformation {
@@ -156,7 +176,7 @@ pub enum FeatureTransformation {
     WindowAgg {
         def_expr: String,
         #[serde(skip_serializing_if = "Option::is_none", default)]
-        agg_func: Option<String>,
+        agg_func: Option<Aggregation>,
         #[serde(skip_serializing_if = "Option::is_none", default)]
         window: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none", default)]

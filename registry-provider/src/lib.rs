@@ -218,14 +218,14 @@ where
     /**
      * Returns all entities belong to specified project
      */
-    async fn get_project_children(
+    async fn get_children(
         &self,
         id: Uuid,
         entity_types: HashSet<EntityType>,
     ) -> Result<Vec<Entity<EntityProp>>, RegistryError> {
         // Make sure the entity has correct type
         let et = self.get_entity(id).await?.entity_type;
-        if et != EntityType::Project {
+        if et != EntityType::Project && et != EntityType::Anchor {
             return Err(RegistryError::WrongEntityType(id, et));
         }
         // Get all ids belongs to this project
