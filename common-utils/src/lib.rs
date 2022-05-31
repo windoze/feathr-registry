@@ -35,7 +35,9 @@ pub trait Appliable
 where
     Self: Sized,
 {
-    /// Use `apply` if you need to access or mutate `self`
+    /**
+     * Use `apply` if you need to access or mutate `self`
+     */
     fn apply<F>(self, f: F) -> Self
     where
         F: FnOnce(Self) -> Self,
@@ -43,7 +45,9 @@ where
         f(self)
     }
 
-    /// Use `then` if you need to do something irrelevant
+    /**
+     * Use `then` if you need to do something irrelevant
+     */
     fn then<F>(self, f: F) -> Self
     where
         F: FnOnce(),
@@ -53,8 +57,31 @@ where
     }
 }
 
-/// "Appliable" be default is implemented for all sized types
+/**
+ * `Appliable` be default is implemented for all sized types
+ */
 impl<T> Appliable for T where T: Sized {}
+
+/**
+ * Flip `Option<Result<T, E>>` to `Result<Option<T>, E>` so we can use `?` on the result
+ */
+pub trait FlippedOptionResult<T, E>
+{
+    fn flip(self) -> Result<Option<T>, E>;
+}
+
+impl<T, E> FlippedOptionResult<T, E> for Option<Result<T, E>> {
+    fn flip(self) -> Result<Option<T>, E> {
+        self.map_or(Ok(None), |v| v.map(Some))
+    }
+}
+
+pub fn is_default<T>(t: &T) -> bool
+where
+    T: Default + Eq
+{
+    t==&T::default()
+}
 
 static LOGGER: std::sync::Once = std::sync::Once::new();
 

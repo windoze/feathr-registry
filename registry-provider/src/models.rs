@@ -446,7 +446,6 @@ pub struct SourceAttributes {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "typeName", content = "attributes")]
-#[non_exhaustive]
 pub enum Attributes {
     #[serde(rename = "feathr_anchor_feature_v1")]
     AnchorFeature(AnchorFeatureAttributes),
