@@ -8,31 +8,39 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
-#[serde(rename_all = "camelCase")]
-#[oai(rename_all = "camelCase")]
-pub struct EntityResponseItem {
-    pub id: String,
-    pub qualified_name: String,
-    pub name: String,
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Enum)]
+pub enum EntityType {
+    #[oai(rename="unknown")]
+    Unknown,
+
+    #[oai(rename="feathr_workspace_v1")]
+    Project,
+    #[oai(rename="feathr_source_v1")]
+    Source,
+    #[oai(rename="feathr_anchor_v1")]
+    Anchor,
+    #[oai(rename="feathr_anchor_feature_v1")]
+    AnchorFeature,
+    #[oai(rename="feathr_derived_feature_v1")]
+    DerivedFeature,
 }
 
-impl<Prop> From<registry_provider::Entity<Prop>> for EntityResponseItem
-where
-    Prop: Clone + std::fmt::Debug + PartialEq + Eq,
-{
-    fn from(e: registry_provider::Entity<Prop>) -> Self {
-        Self {
-            id: e.id.to_string(),
-            qualified_name: e.qualified_name,
-            name: e.name,
+impl From<registry_provider::EntityType> for EntityType {
+    fn from(v: registry_provider::EntityType) -> Self {
+        match v {
+            registry_provider::EntityType::Unknown => EntityType::Unknown,
+            registry_provider::EntityType::Project => EntityType::Project,
+            registry_provider::EntityType::Source => EntityType::Source,
+            registry_provider::EntityType::Anchor => EntityType::Anchor,
+            registry_provider::EntityType::AnchorFeature => EntityType::AnchorFeature,
+            registry_provider::EntityType::DerivedFeature => EntityType::DerivedFeature,
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 pub struct Entities {
-    pub entities: Vec<EntityResponseItem>,
+    pub entities: Vec<Entity>,
 }
 
 impl FromIterator<registry_provider::Entity<EntityProperty>> for Entities {
@@ -45,7 +53,7 @@ impl FromIterator<registry_provider::Entity<EntityProperty>> for Entities {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Object)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct EntityRef {
     guid: String,
@@ -75,7 +83,7 @@ impl TryInto<registry_provider::EntityRef> for EntityRef {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Object)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct ProjectAttributes {
     pub qualified_name: String,
@@ -133,7 +141,7 @@ impl TryInto<registry_provider::ProjectAttributes> for ProjectAttributes {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Object)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct SourceAttributes {
     pub qualified_name: String,
@@ -182,7 +190,7 @@ impl TryInto<registry_provider::SourceAttributes> for SourceAttributes {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Object)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct AnchorAttributes {
     pub qualified_name: String,
@@ -223,7 +231,7 @@ impl TryInto<registry_provider::AnchorAttributes> for AnchorAttributes {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Object)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct AnchorFeatureAttributes {
     pub qualified_name: String,
@@ -248,7 +256,7 @@ impl From<registry_provider::AnchorFeatureAttributes> for AnchorFeatureAttribute
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Object)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct DerivedFeatureAttributes {
     #[oai(rename = "qualifiedName")]
@@ -286,7 +294,7 @@ impl From<registry_provider::DerivedFeatureAttributes> for DerivedFeatureAttribu
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Union)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Union)]
 pub enum EntityAttributes {
     Project(ProjectAttributes),
     Source(SourceAttributes),
@@ -307,12 +315,14 @@ impl From<registry_provider::Attributes> for EntityAttributes {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Object)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct Entity {
     pub guid: String,
     #[oai(rename = "lastModifiedTS")]
     pub last_modified_ts: String,
+    #[oai(rename = "typeName")]
+    pub entity_type: EntityType,
     pub status: String,
     pub display_text: String,
     pub classification_names: Vec<String>,
@@ -323,19 +333,20 @@ pub struct Entity {
     pub attributes: EntityAttributes,
 }
 
-impl From<EntityProperty> for Entity {
-    fn from(v: EntityProperty) -> Self {
+impl From<registry_provider::Entity<EntityProperty>> for Entity {
+    fn from(v: registry_provider::Entity<EntityProperty>) -> Self {
         Self {
-            guid: v.guid.to_string(),
-            last_modified_ts: v.last_modified_ts,
-            status: format!("{:?}", v.status),
-            display_text: v.display_text,
-            classification_names: v.classification_names,
-            meaning_names: v.meaning_names,
-            meanings: v.meanings,
-            is_incomplete: v.is_incomplete,
-            labels: v.labels,
-            attributes: v.attributes.into(),
+            guid: v.properties.guid.to_string(),
+            entity_type: v.entity_type.into(),
+            last_modified_ts: v.properties.last_modified_ts,
+            status: format!("{:?}", v.properties.status),
+            display_text: v.properties.display_text,
+            classification_names: v.properties.classification_names,
+            meaning_names: v.properties.meaning_names,
+            meanings: v.properties.meanings,
+            is_incomplete: v.properties.is_incomplete,
+            labels: v.properties.labels,
+            attributes: v.properties.attributes.into(),
         }
     }
 }
@@ -403,10 +414,13 @@ pub enum ValueType {
     #[serde(alias = "0")]
     UNSPECIFIED,
     #[serde(rename = "BOOLEAN", alias = "1")]
+    #[oai(rename = "BOOLEAN")]
     BOOL,
     #[serde(rename = "INT", alias = "2")]
+    #[oai(rename = "INT")]
     INT32,
     #[serde(rename = "LONG", alias = "3")]
+    #[oai(rename = "LONG")]
     INT64,
     #[serde(alias = "4")]
     FLOAT,
@@ -716,21 +730,21 @@ impl Into<registry_provider::Aggregation> for Aggregation {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct FeatureTransformation {
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none", default)]
     def_expr: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none", default)]
     agg_func: Option<Aggregation>,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none", default)]
     window: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none", default)]
     group_by: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none", default)]
     filter: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none", default)]
     limit: Option<u64>,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none", default)]
     transform_expr: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none", default)]
     name: Option<String>,
 }
 

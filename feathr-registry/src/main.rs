@@ -1,9 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use common_utils::{set, Logged};
+use common_utils::{set, Blank, Logged};
 use log::debug;
 use poem::{
-    error::NotFoundError,
     listener::TcpListener,
     middleware::{Cors, Tracing},
     web::Data,
@@ -79,7 +78,7 @@ impl FeathrApi {
         size: Query<Option<usize>>,
         offset: Query<Option<usize>>,
     ) -> poem::Result<Json<Entities>> {
-        Ok(Json(if keyword.0.is_none() {
+        Ok(Json(if keyword.0.is_blank() {
             data.registry
                 .read()
                 .await
@@ -124,6 +123,24 @@ impl FeathrApi {
         &self,
         data: Data<&backend::RegistryData>,
         project: Path<String>,
+    ) -> poem::Result<Json<api_models::Entity>> {
+        debug!("Project name: {}", project.0);
+
+        let e = data
+            .registry
+            .read()
+            .await
+            .get_entity_by_id_or_qualified_name(&project.0)
+            .await
+            .map_api_error()?;
+        Ok(Json(e.into()))
+    }
+
+    #[oai(path = "/projects/:project/lineage", method = "get")]
+    async fn get_project_lineage(
+        &self,
+        data: Data<&backend::RegistryData>,
+        project: Path<String>,
     ) -> poem::Result<Json<EntityLineage>> {
         debug!("Project name: {}", project.0);
 
@@ -137,7 +154,7 @@ impl FeathrApi {
 
         let entities: HashMap<String, api_models::Entity> = entities
             .into_iter()
-            .map(|e| (e.id.to_string(), e.properties.into()))
+            .map(|e| (e.id.to_string(), e.into()))
             .collect();
         Ok(Json(EntityLineage {
             guid_entity_map: entities,
@@ -169,7 +186,7 @@ impl FeathrApi {
             .await
             .map_api_error()?;
 
-        let feature_ids: HashSet<Uuid> = if keyword.0.is_none() {
+        let feature_ids: HashSet<Uuid> = if keyword.0.is_blank() {
             // All features under the project
             feature_entities.iter().map(|e| e.id).collect()
         } else {
@@ -191,9 +208,8 @@ impl FeathrApi {
         let entities = feature_entities
             .into_iter()
             .filter(|e| feature_ids.contains(&e.id))
-            .map(|e| e.into())
             .collect();
-        Ok(Json(Entities { entities }))
+        Ok(Json(entities))
     }
 
     #[oai(path = "/projects/:project/datasources", method = "get")]
@@ -206,7 +222,7 @@ impl FeathrApi {
         offset: Query<Option<usize>>,
     ) -> poem::Result<Json<Entities>> {
         let id = data.get_id(project.0).await?;
-        Ok(Json(if keyword.0.is_none() {
+        Ok(Json(if keyword.0.is_blank() {
             data.registry
                 .read()
                 .await
@@ -249,6 +265,25 @@ impl FeathrApi {
         Ok(Json(guid.into()))
     }
 
+    #[allow(unused)]
+    #[oai(path = "/projects/:project/datasources/:source", method = "get")]
+    async fn get_datasource(
+        &self,
+        data: Data<&backend::RegistryData>,
+        project: Path<String>,
+        source: Path<String>,
+    ) -> poem::Result<Json<api_models::Entity>> {
+        // TODO: Make sure the data source is under the project and have the correct entity type
+        let r = data
+            .registry
+            .read()
+            .await
+            .get_entity_by_id_or_qualified_name(&source)
+            .await
+            .map_api_error()?;
+        Ok(Json(r.into()))
+    }
+
     #[oai(path = "/projects/:project/derivedfeatures", method = "get")]
     async fn get_project_derived_features(
         &self,
@@ -259,7 +294,7 @@ impl FeathrApi {
         offset: Query<Option<usize>>,
     ) -> poem::Result<Json<Entities>> {
         let id = data.get_id(project.0).await?;
-        Ok(Json(if keyword.0.is_none() {
+        Ok(Json(if keyword.0.is_blank() {
             data.registry
                 .read()
                 .await
@@ -312,7 +347,7 @@ impl FeathrApi {
         offset: Query<Option<usize>>,
     ) -> poem::Result<Json<Entities>> {
         let id = data.get_id(project.0).await?;
-        Ok(Json(if keyword.0.is_none() {
+        Ok(Json(if keyword.0.is_blank() {
             data.registry
                 .read()
                 .await
@@ -356,6 +391,25 @@ impl FeathrApi {
     }
 
     #[allow(unused)]
+    #[oai(path = "/projects/:project/anchors/:anchor", method = "get")]
+    async fn get_anchor(
+        &self,
+        data: Data<&backend::RegistryData>,
+        project: Path<String>,
+        anchor: Path<String>,
+    ) -> poem::Result<Json<api_models::Entity>> {
+        // TODO: Make sure the anchor is under the project
+        let r = data
+            .registry
+            .read()
+            .await
+            .get_entity_by_id_or_qualified_name(&anchor)
+            .await
+            .map_api_error()?;
+        Ok(Json(r.into()))
+    }
+
+    #[allow(unused)]
     #[oai(path = "/projects/:project/anchors/:anchor/features", method = "get")]
     async fn get_anchor_features(
         &self,
@@ -368,7 +422,7 @@ impl FeathrApi {
     ) -> poem::Result<Json<Entities>> {
         // TODO: Make sure the anchor is under the project
         let anchor_id = data.get_id(anchor.0).await?;
-        Ok(Json(if keyword.0.is_none() {
+        Ok(Json(if keyword.0.is_blank() {
             data.registry
                 .read()
                 .await
@@ -401,13 +455,17 @@ impl FeathrApi {
         anchor: Path<String>,
         def: Json<AnchorFeatureDef>,
     ) -> poem::Result<Json<CreationResponse>> {
+        debug!(
+            "Creating anchor feature {} under anchor {}",
+            def.0.qualified_name, anchor.0
+        );
         let project_id = data.get_id(project.0).await?;
         let anchor_id = data.get_id(anchor.0).await?;
         let guid = data
             .registry
             .write()
             .await
-            .new_anchor_feature(project_id, anchor_id, &def.0.try_into()?)
+            .new_anchor_feature(project_id, anchor_id, &def.0.try_into().log()?)
             .await
             .map_api_error()?;
         Ok(Json(guid.into()))
@@ -423,10 +481,10 @@ impl FeathrApi {
             .registry
             .read()
             .await
-            .get_entity_by_qualified_name(&feature)
+            .get_entity_by_id_or_qualified_name(&feature)
             .await
-            .ok_or_else(|| NotFoundError)?;
-        Ok(Json(r.properties.into()))
+            .map_api_error()?;
+        Ok(Json(r.into()))
     }
 
     #[oai(path = "/features/:feature/lineage", method = "get")]
@@ -453,7 +511,7 @@ impl FeathrApi {
             .map_api_error()?;
         let mut entities: HashMap<String, api_models::Entity> = HashMap::new();
         for e in up_entities.into_iter().chain(down_entities.into_iter()) {
-            entities.insert(e.id.to_string(), e.properties.into());
+            entities.insert(e.id.to_string(), e.into());
         }
         let mut edges: HashSet<Relationship> = HashSet::new();
         for e in up_edges.into_iter().chain(down_edges.into_iter()) {
@@ -495,10 +553,18 @@ async fn search_entities(
 async fn main() -> Result<(), anyhow::Error> {
     common_utils::init_logger();
 
-    let api_base = format!("/{}", std::env::var("API_BASE").unwrap_or_default());
+    // Make sure API Base starts with "/"
+    let api_base = format!(
+        "/{}",
+        std::env::var("API_BASE")
+            .unwrap_or_default()
+            .trim_start_matches("/")
+    );
+
+    // TODO: How to get server address?
     let server_addr = format!(
         "{}{}",
-        std::env::var("SERVER_ADDR").unwrap_or_else(|_| "http://localhost:3000".to_string()),
+        std::env::var("SERVER_ADDR").unwrap_or_else(|_| "http://localhost:8000".to_string()),
         api_base,
     );
 
@@ -519,7 +585,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .with(Tracing)
         .data(data);
     Server::new(TcpListener::bind(
-        std::env::var("LISTENING_ADDR").unwrap_or_else(|_| "0.0.0.0:3000".to_string()),
+        std::env::var("LISTENING_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".to_string()),
     ))
     .run(route)
     .await

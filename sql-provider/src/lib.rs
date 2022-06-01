@@ -76,7 +76,10 @@ where
     /**
      * Get entity id by its name
      */
-    async fn get_entity_id_by_qualified_name(&self, qualified_name: &str) -> Result<Uuid, RegistryError> {
+    async fn get_entity_id_by_qualified_name(
+        &self,
+        qualified_name: &str,
+    ) -> Result<Uuid, RegistryError> {
         self.name_id_map
             .get(qualified_name)
             .ok_or_else(|| RegistryError::EntityNotFound(qualified_name.to_string()))
@@ -267,6 +270,17 @@ where
             EdgeType::Contains,
             EdgeProp::new(Uuid::new_v4(), anchor_id, feature_id, EdgeType::Contains),
         )?;
+
+        // Anchor feature also consumes source of the anchor
+        let sources = self.get_neighbors(anchor_id, EdgeType::Consumes).await?;
+        for s in sources {
+            self.connect(
+                feature_id,
+                s.id,
+                EdgeType::Consumes,
+                EdgeProp::new(Uuid::new_v4(), feature_id, s.id, EdgeType::Consumes),
+            )?;
+        }
 
         Ok(feature_id)
     }

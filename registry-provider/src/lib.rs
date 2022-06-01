@@ -191,13 +191,27 @@ where
     // Provided implementations
 
     /**
+     * Get one entity by its qualified name
+     */
+    async fn get_entity_by_id_or_qualified_name(
+        &self,
+        id_or_name: &str,
+    ) -> Result<Entity<EntityProp>, RegistryError> {
+        match Uuid::parse_str(&id_or_name) {
+            Ok(id) => self.get_entity(id).await,
+            Err(_) => self
+                .get_entity_by_qualified_name(id_or_name)
+                .await
+                .ok_or_else(|| RegistryError::EntityNotFound(id_or_name.to_string())),
+        }
+    }
+
+    /**
      * Get entity id by its qualified name or id
      */
     async fn get_entity_id(&self, name_or_id: &str) -> Result<Uuid, RegistryError> {
         match Uuid::parse_str(name_or_id) {
-            Ok(id) => {
-                Ok(self.get_entity(id).await?.id)
-            }
+            Ok(id) => Ok(self.get_entity(id).await?.id),
             Err(_) => self.get_entity_id_by_qualified_name(name_or_id).await,
         }
     }

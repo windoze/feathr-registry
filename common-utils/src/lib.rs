@@ -83,13 +83,36 @@ where
     t==&T::default()
 }
 
+pub trait Blank {
+    fn is_blank(&self) -> bool;
+}
+
+impl Blank for Option<String> {
+    fn is_blank(&self) -> bool {
+        match &self {
+            Some(s) => s.is_empty(),
+            None => true,
+        }
+    }
+}
+
 static LOGGER: std::sync::Once = std::sync::Once::new();
 
 pub fn init_logger() {
     LOGGER.call_once(|| {
         dotenv::dotenv().ok();
+        let modules = [
+            "atlas_provider",
+            "common_utils",
+            "feathr_registry",
+            "registry_cli",
+            "registry_provider",
+            "sql_provider",
+        ];
+        let module_logs = modules.into_iter().map(|m| format!("{}=debug", m)).collect::<Vec<_>>().join(",");
+        let rust_log = format!("info,tantivy=warn,tiberius=warn,{}", module_logs);
         if std::env::var_os("RUST_LOG").is_none() {
-            std::env::set_var("RUST_LOG", "info,tantivy=warn,tiberius=warn,sql_registry=debug")
+            std::env::set_var("RUST_LOG", &rust_log);
         }
         tracing_subscriber::fmt::init();
     });

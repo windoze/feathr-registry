@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use common_utils::Logged;
 use poem::{error::ResponseError, http::StatusCode};
 use registry_provider::RegistryError;
 use thiserror::Error;
@@ -45,6 +46,6 @@ pub trait IntoApiResult<T> {
 
 impl<T> IntoApiResult<T> for Result<T, RegistryError> {
     fn map_api_error(self) -> Result<T, ApiError> {
-        self.map_err(|e| e.into())
+        self.log().map_err(|e| e.into())
     }
 }

@@ -1,3 +1,5 @@
 /target
 /static-files
 .env*
+/ui
+/.vscode
