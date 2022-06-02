@@ -207,6 +207,27 @@ where
     }
 
     /**
+     * Get entity name
+     */
+    async fn get_entity_name(&self, uuid: Uuid) -> Result<String, RegistryError> {
+        Ok(self.get_entity(uuid).await?.name)
+    }
+
+    /**
+     * Get entity qualified name
+     */
+    async fn get_entity_qualified_name(&self, uuid: Uuid) -> Result<String, RegistryError> {
+        Ok(self.get_entity(uuid).await?.qualified_name)
+    }
+
+    /**
+     * Get entity type
+     */
+    async fn get_entity_type(&self, uuid: Uuid) -> Result<EntityType, RegistryError> {
+        Ok(self.get_entity(uuid).await?.entity_type)
+    }
+
+    /**
      * Get entity id by its qualified name or id
      */
     async fn get_entity_id(&self, name_or_id: &str) -> Result<Uuid, RegistryError> {

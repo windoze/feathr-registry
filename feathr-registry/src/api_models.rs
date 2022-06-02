@@ -319,6 +319,8 @@ impl From<registry_provider::Attributes> for EntityAttributes {
 #[oai(rename_all = "camelCase")]
 pub struct Entity {
     pub guid: String,
+    pub name: String,
+    pub qualified_name: String,
     #[oai(rename = "lastModifiedTS")]
     pub last_modified_ts: String,
     #[oai(rename = "typeName")]
@@ -337,6 +339,8 @@ impl From<registry_provider::Entity<EntityProperty>> for Entity {
     fn from(v: registry_provider::Entity<EntityProperty>) -> Self {
         Self {
             guid: v.properties.guid.to_string(),
+            name: v.name,
+            qualified_name: v.qualified_name,
             entity_type: v.entity_type.into(),
             last_modified_ts: v.properties.last_modified_ts,
             status: format!("{:?}", v.properties.status),
@@ -530,6 +534,8 @@ pub struct EntityLineage {
 #[serde(rename_all = "camelCase")]
 #[oai(rename_all = "camelCase")]
 pub struct ProjectDef {
+    pub name: String,
+    #[oai(skip)]
     pub qualified_name: String,
     pub tags: HashMap<String, String>,
 }
@@ -549,6 +555,7 @@ impl TryInto<registry_provider::ProjectDef> for ProjectDef {
 #[serde(rename_all = "camelCase")]
 pub struct SourceDef {
     pub name: String,
+    #[oai(skip)]
     pub qualified_name: String,
     #[serde(rename = "type")]
     pub source_type: String,
@@ -580,6 +587,7 @@ impl TryInto<registry_provider::SourceDef> for SourceDef {
 #[serde(rename_all = "camelCase")]
 pub struct AnchorDef {
     pub name: String,
+    #[oai(skip)]
     pub qualified_name: String,
     pub source_id: String,
     pub tags: HashMap<String, String>,
@@ -637,11 +645,11 @@ impl From<registry_provider::FeatureType> for FeatureType {
 pub struct TypedKey {
     pub key_column: String,
     pub key_column_type: ValueType,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if_is_none)]
     pub full_name: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if_is_none)]
     pub description: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if_is_none)]
     pub key_column_alias: Option<String>,
 }
 
@@ -730,21 +738,21 @@ impl Into<registry_provider::Aggregation> for Aggregation {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct FeatureTransformation {
-    #[oai(skip_serializing_if = "Option::is_none", default)]
+    #[oai(skip_serializing_if_is_none, default)]
     def_expr: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none", default)]
+    #[oai(skip_serializing_if_is_none, default)]
     agg_func: Option<Aggregation>,
-    #[oai(skip_serializing_if = "Option::is_none", default)]
+    #[oai(skip_serializing_if_is_none, default)]
     window: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none", default)]
+    #[oai(skip_serializing_if_is_none, default)]
     group_by: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none", default)]
+    #[oai(skip_serializing_if_is_none, default)]
     filter: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none", default)]
+    #[oai(skip_serializing_if_is_none, default)]
     limit: Option<u64>,
-    #[oai(skip_serializing_if = "Option::is_none", default)]
+    #[oai(skip_serializing_if_is_none, default)]
     transform_expr: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none", default)]
+    #[oai(skip_serializing_if_is_none, default)]
     name: Option<String>,
 }
 
@@ -812,6 +820,7 @@ impl From<registry_provider::FeatureTransformation> for FeatureTransformation {
 #[oai(rename_all = "camelCase")]
 pub struct AnchorFeatureDef {
     pub name: String,
+    #[oai(skip)]
     pub qualified_name: String,
     pub feature_type: FeatureType,
     pub transformation: FeatureTransformation,
@@ -843,11 +852,14 @@ impl TryInto<registry_provider::AnchorFeatureDef> for AnchorFeatureDef {
 #[oai(rename_all = "camelCase")]
 pub struct DerivedFeatureDef {
     pub name: String,
+    #[oai(skip)]
     pub qualified_name: String,
     pub feature_type: FeatureType,
     pub transformation: FeatureTransformation,
     pub key: Vec<TypedKey>,
+    #[oai(validator(unique_items))]
     pub input_anchor_features: Vec<String>,
+    #[oai(validator(unique_items))]
     pub input_derived_features: Vec<String>,
     pub tags: HashMap<String, String>,
 }

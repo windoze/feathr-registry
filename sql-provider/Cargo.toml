@@ -16,7 +16,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1.8"
 petgraph = "0.6"
-tantivy = "0.17"
+tantivy = "0.18"
 tiberius = { version = "0.9", features = [
     "tds73",
     "tokio-rustls",
@@ -35,7 +35,6 @@ sqlx = { version = "0.5", features = [
 
 common-utils = { path = "../common-utils" }
 registry-provider = { path = "../registry-provider" }
-hocon = "0.9"
 
 [dev-dependencies]
 rand = "0.8"

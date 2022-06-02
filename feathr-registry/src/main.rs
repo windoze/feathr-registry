@@ -11,7 +11,7 @@ use poem::{
 use poem_openapi::{
     param::{Path, Query},
     payload::Json,
-    OpenApi, OpenApiService,
+    OpenApi, OpenApiService, Tags,
 };
 use registry_provider::{
     EdgePropMutator, EdgeType, Entity, EntityProperty, EntityType, RegistryProvider,
@@ -63,14 +63,34 @@ mod backend {
                 }
             }
         }
+
+        pub async fn get_name(&self, id: Uuid) -> poem::Result<String> {
+            Ok(self
+                .registry
+                .read()
+                .await
+                .get_entity_name(id)
+                .await
+                .map_api_error()?)
+        }
     }
+}
+
+#[derive(Tags)]
+enum ApiTags {
+    Project,
+    DataSource,
+    Anchor,
+    AnchorFeature,
+    DerivedFeature,
+    Feature,
 }
 
 struct FeathrApi;
 
 #[OpenApi]
 impl FeathrApi {
-    #[oai(path = "/projects", method = "get")]
+    #[oai(path = "/projects", method = "get", tag = "ApiTags::Project")]
     async fn get_projects(
         &self,
         data: Data<&backend::RegistryData>,
@@ -102,12 +122,13 @@ impl FeathrApi {
         }))
     }
 
-    #[oai(path = "/projects", method = "post")]
+    #[oai(path = "/projects", method = "post", tag = "ApiTags::Project")]
     async fn new_project(
         &self,
         data: Data<&backend::RegistryData>,
-        def: Json<ProjectDef>,
+        mut def: Json<ProjectDef>,
     ) -> poem::Result<Json<CreationResponse>> {
+        def.0.qualified_name = def.0.name.clone();
         let guid = data
             .registry
             .write()
@@ -118,7 +139,7 @@ impl FeathrApi {
         Ok(Json(guid.into()))
     }
 
-    #[oai(path = "/projects/:project", method = "get")]
+    #[oai(path = "/projects/:project", method = "get", tag = "ApiTags::Project")]
     async fn get_project(
         &self,
         data: Data<&backend::RegistryData>,
@@ -136,7 +157,11 @@ impl FeathrApi {
         Ok(Json(e.into()))
     }
 
-    #[oai(path = "/projects/:project/lineage", method = "get")]
+    #[oai(
+        path = "/projects/:project/lineage",
+        method = "get",
+        tag = "ApiTags::Project"
+    )]
     async fn get_project_lineage(
         &self,
         data: Data<&backend::RegistryData>,
@@ -162,7 +187,11 @@ impl FeathrApi {
         }))
     }
 
-    #[oai(path = "/projects/:project/features", method = "get")]
+    #[oai(
+        path = "/projects/:project/features",
+        method = "get",
+        tag = "ApiTags::Project"
+    )]
     async fn get_project_features(
         &self,
         data: Data<&backend::RegistryData>,
@@ -212,7 +241,11 @@ impl FeathrApi {
         Ok(Json(entities))
     }
 
-    #[oai(path = "/projects/:project/datasources", method = "get")]
+    #[oai(
+        path = "/projects/:project/datasources",
+        method = "get",
+        tag = "ApiTags::DataSource"
+    )]
     async fn get_datasources(
         &self,
         data: Data<&backend::RegistryData>,
@@ -247,14 +280,20 @@ impl FeathrApi {
         }))
     }
 
-    #[oai(path = "/projects/:project/datasources", method = "post")]
+    #[oai(
+        path = "/projects/:project/datasources",
+        method = "post",
+        tag = "ApiTags::DataSource"
+    )]
     async fn new_datasource(
         &self,
         data: Data<&backend::RegistryData>,
         project: Path<String>,
-        def: Json<SourceDef>,
+        mut def: Json<SourceDef>,
     ) -> poem::Result<Json<CreationResponse>> {
         let id = data.get_id(project.0).await?;
+        let project_name = data.get_name(id).await?;
+        def.0.qualified_name = format!("{}__{}", project_name, def.0.name);
         let guid = data
             .registry
             .write()
@@ -265,26 +304,40 @@ impl FeathrApi {
         Ok(Json(guid.into()))
     }
 
-    #[allow(unused)]
-    #[oai(path = "/projects/:project/datasources/:source", method = "get")]
+    #[oai(
+        path = "/projects/:project/datasources/:source",
+        method = "get",
+        tag = "ApiTags::DataSource"
+    )]
     async fn get_datasource(
         &self,
         data: Data<&backend::RegistryData>,
         project: Path<String>,
         source: Path<String>,
     ) -> poem::Result<Json<api_models::Entity>> {
-        // TODO: Make sure the data source is under the project and have the correct entity type
+        let project_id = data.get_id(project.0).await?;
+        let source_id = match data.get_id(source.0.clone()).await {
+            Ok(id) => id,
+            Err(_) => {
+                let project_name = data.get_name(project_id).await?;
+                data.get_id(format!("{}__{}", project_name, source.0)).await?
+            },
+        };
         let r = data
             .registry
             .read()
             .await
-            .get_entity_by_id_or_qualified_name(&source)
+            .get_entity(source_id)
             .await
             .map_api_error()?;
         Ok(Json(r.into()))
     }
 
-    #[oai(path = "/projects/:project/derivedfeatures", method = "get")]
+    #[oai(
+        path = "/projects/:project/derivedfeatures",
+        method = "get",
+        tag = "ApiTags::DerivedFeature"
+    )]
     async fn get_project_derived_features(
         &self,
         data: Data<&backend::RegistryData>,
@@ -319,14 +372,20 @@ impl FeathrApi {
         }))
     }
 
-    #[oai(path = "/projects/:project/derivedfeatures", method = "post")]
+    #[oai(
+        path = "/projects/:project/derivedfeatures",
+        method = "post",
+        tag = "ApiTags::DerivedFeature"
+    )]
     async fn new_derived_feature(
         &self,
         data: Data<&backend::RegistryData>,
         project: Path<String>,
-        def: Json<DerivedFeatureDef>,
+        mut def: Json<DerivedFeatureDef>,
     ) -> poem::Result<Json<CreationResponse>> {
         let id = data.get_id(project.0).await?;
+        let project_name = data.get_name(id).await?;
+        def.0.qualified_name = format!("{}__{}", project_name, def.0.name);
         let guid = data
             .registry
             .write()
@@ -337,7 +396,11 @@ impl FeathrApi {
         Ok(Json(guid.into()))
     }
 
-    #[oai(path = "/projects/:project/anchors", method = "get")]
+    #[oai(
+        path = "/projects/:project/anchors",
+        method = "get",
+        tag = "ApiTags::Anchor"
+    )]
     async fn get_project_anchors(
         &self,
         data: Data<&backend::RegistryData>,
@@ -372,14 +435,20 @@ impl FeathrApi {
         }))
     }
 
-    #[oai(path = "/projects/:project/anchors", method = "post")]
+    #[oai(
+        path = "/projects/:project/anchors",
+        method = "post",
+        tag = "ApiTags::Anchor"
+    )]
     async fn new_anchor(
         &self,
         data: Data<&backend::RegistryData>,
         project: Path<String>,
-        def: Json<AnchorDef>,
+        mut def: Json<AnchorDef>,
     ) -> poem::Result<Json<CreationResponse>> {
         let id = data.get_id(project.0).await?;
+        let project_name = data.get_name(id).await?;
+        def.0.qualified_name = format!("{}__{}", project_name, def.0.name);
         let guid = data
             .registry
             .write()
@@ -390,27 +459,40 @@ impl FeathrApi {
         Ok(Json(guid.into()))
     }
 
-    #[allow(unused)]
-    #[oai(path = "/projects/:project/anchors/:anchor", method = "get")]
+    #[oai(
+        path = "/projects/:project/anchors/:anchor",
+        method = "get",
+        tag = "ApiTags::Anchor"
+    )]
     async fn get_anchor(
         &self,
         data: Data<&backend::RegistryData>,
         project: Path<String>,
         anchor: Path<String>,
     ) -> poem::Result<Json<api_models::Entity>> {
-        // TODO: Make sure the anchor is under the project
+        let project_id = data.get_id(project.0).await?;
+        let anchor_id = match data.get_id(anchor.0.clone()).await {
+            Ok(id) => id,
+            Err(_) => {
+                let project_name = data.get_name(project_id).await?;
+                data.get_id(format!("{}__{}", project_name, anchor.0)).await?
+            },
+        };
         let r = data
             .registry
             .read()
             .await
-            .get_entity_by_id_or_qualified_name(&anchor)
+            .get_entity(anchor_id)
             .await
             .map_api_error()?;
         Ok(Json(r.into()))
     }
 
-    #[allow(unused)]
-    #[oai(path = "/projects/:project/anchors/:anchor/features", method = "get")]
+    #[oai(
+        path = "/projects/:project/anchors/:anchor/features",
+        method = "get",
+        tag = "ApiTags::AnchorFeature"
+    )]
     async fn get_anchor_features(
         &self,
         data: Data<&backend::RegistryData>,
@@ -420,8 +502,14 @@ impl FeathrApi {
         size: Query<Option<usize>>,
         offset: Query<Option<usize>>,
     ) -> poem::Result<Json<Entities>> {
-        // TODO: Make sure the anchor is under the project
-        let anchor_id = data.get_id(anchor.0).await?;
+        let project_id = data.get_id(project.0).await?;
+        let anchor_id = match data.get_id(anchor.0.clone()).await {
+            Ok(id) => id,
+            Err(_) => {
+                let project_name = data.get_name(project_id).await?;
+                data.get_id(format!("{}__{}", project_name, anchor.0)).await?
+            },
+        };
         Ok(Json(if keyword.0.is_blank() {
             data.registry
                 .read()
@@ -447,13 +535,17 @@ impl FeathrApi {
         }))
     }
 
-    #[oai(path = "/projects/:project/anchors/:anchor/features", method = "post")]
+    #[oai(
+        path = "/projects/:project/anchors/:anchor/features",
+        method = "post",
+        tag = "ApiTags::AnchorFeature"
+    )]
     async fn new_anchor_feature(
         &self,
         data: Data<&backend::RegistryData>,
         project: Path<String>,
         anchor: Path<String>,
-        def: Json<AnchorFeatureDef>,
+        mut def: Json<AnchorFeatureDef>,
     ) -> poem::Result<Json<CreationResponse>> {
         debug!(
             "Creating anchor feature {} under anchor {}",
@@ -461,6 +553,9 @@ impl FeathrApi {
         );
         let project_id = data.get_id(project.0).await?;
         let anchor_id = data.get_id(anchor.0).await?;
+        let project_name = data.get_name(project_id).await?;
+        let anchor_name = data.get_name(anchor_id).await?;
+        def.0.qualified_name = format!("{}__{}__{}", project_name, anchor_name, def.0.name);
         let guid = data
             .registry
             .write()
@@ -471,7 +566,7 @@ impl FeathrApi {
         Ok(Json(guid.into()))
     }
 
-    #[oai(path = "/features/:feature", method = "get")]
+    #[oai(path = "/features/:feature", method = "get", tag = "ApiTags::Feature")]
     async fn get_feature(
         &self,
         data: Data<&backend::RegistryData>,
@@ -487,7 +582,11 @@ impl FeathrApi {
         Ok(Json(r.into()))
     }
 
-    #[oai(path = "/features/:feature/lineage", method = "get")]
+    #[oai(
+        path = "/features/:feature/lineage",
+        method = "get",
+        tag = "ApiTags::Feature"
+    )]
     async fn get_feature_lineage(
         &self,
         data: Data<&backend::RegistryData>,
