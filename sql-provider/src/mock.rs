@@ -43,7 +43,6 @@ pub async fn load() -> crate::Registry<EntityProperty, EdgeProperty> {
             project,
             EdgeType::BelongsTo,
             EdgeProperty {
-                guid: Uuid::new_v4(),
                 edge_type: EdgeType::BelongsTo,
                 from: sub,
                 to: project,

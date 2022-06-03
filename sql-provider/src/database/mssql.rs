@@ -15,23 +15,19 @@ use crate::{db_registry::ExternalStorage, Registry};
 
 fn edge_try_from_row(r: Row) -> Result<EdgeProperty, tiberius::error::Error> {
     let c: Option<&str> = r.get(0);
-    let guid = Uuid::parse_str(c.unwrap_or_default())
-        .map_err(|e| tiberius::error::Error::Conversion(format!("{:?}", e).into()))?;
-    let c: Option<&str> = r.get(1);
     let from = Uuid::parse_str(c.unwrap_or_default())
         .map_err(|e| tiberius::error::Error::Conversion(format!("{:?}", e).into()))?;
-    let c: Option<&str> = r.get(2);
+    let c: Option<&str> = r.get(1);
     let to = Uuid::parse_str(c.unwrap_or_default())
         .map_err(|e| tiberius::error::Error::Conversion(format!("{:?}", e).into()))?;
     let s = r
-        .get::<&str, usize>(3)
+        .get::<&str, usize>(2)
         .map(|s| format!("\"{}\"", s))
         .ok_or_else(|| tiberius::error::Error::Conversion("".into()))?;
     let edge_type: EdgeType = serde_json::from_str::<EdgeType>(&s)
         .ok()
         .ok_or_else(|| tiberius::error::Error::Conversion("".into()))?;
     Ok(EdgeProperty {
-        guid,
         from,
         to,
         edge_type,
@@ -78,7 +74,7 @@ async fn load_edges(
     debug!("Loading edges from {}", edges_table);
     let x: Vec<EdgeProperty> = conn
         .simple_query(format!(
-            "SELECT edge_id, from_id, to_id, edge_type from {}",
+            "SELECT from_id, to_id, edge_type from {}",
             edges_table
         ))
         .await?
@@ -296,7 +292,7 @@ impl ExternalStorage<EntityProperty> for MsSqlStorage {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
+    use std::{fs::File, collections::HashMap};
 
     use registry_provider::*;
     use serde::Deserialize;
@@ -336,7 +332,6 @@ mod tests {
                 project,
                 EdgeType::BelongsTo,
                 EdgeProperty {
-                    guid: Uuid::new_v4(),
                     edge_type: EdgeType::BelongsTo,
                     from: sub,
                     to: project,
@@ -359,7 +354,7 @@ mod tests {
         });
         println!("-- ---------------------------");
         r.graph.edge_weights().for_each(|w| {
-            println!("insert into edges_new (edge_id, from_id, to_id, edge_type) values ('{}', '{}', '{}', '{:?}');", w.id, w.from, w.to, w.edge_type);
+            println!("insert into edges_new (edge_id, from_id, to_id, edge_type) values ('{}', '{}', '{}', '{:?}');", Uuid::new_v4(), w.from, w.to, w.edge_type);
         });
     }
 }

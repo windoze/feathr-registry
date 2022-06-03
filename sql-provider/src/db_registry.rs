@@ -436,7 +436,7 @@ where
         Ok(uuid)
     }
 
-    pub async fn delete_entity(&mut self, uuid: Uuid) -> Result<(), RegistryError> {
+    pub async fn delete_entity_by_id(&mut self, uuid: Uuid) -> Result<(), RegistryError> {
         if self
             .graph
             .edges_directed(self.get_idx(uuid)?, Direction::Outgoing)
@@ -461,7 +461,6 @@ where
             for edge in &edges {
                 let (from_idx, to_idx) = self.graph.edge_endpoints(edge.to_owned()).unwrap();
                 let et = self.graph.edge_weight(edge.to_owned()).unwrap().edge_type;
-                let eid = self.graph.edge_weight(edge.to_owned()).unwrap().id;
                 let mut from = self.graph.node_weight(from_idx).unwrap().to_owned();
                 let mut to = self
                     .graph
@@ -471,7 +470,7 @@ where
                     .to_owned();
                 let from_id = from.id;
                 let to_id = to.id;
-                EntityProp::disconnect(&mut from, from_id, &mut to, to_id, et, eid);
+                EntityProp::disconnect(&mut from, from_id, &mut to, to_id, et);
                 self.graph
                     .node_weight_mut(from_idx)
                     .map(|w| w.properties = from.properties);
@@ -499,13 +498,9 @@ where
         to: Uuid,
         edge_type: EdgeType,
         properties: EdgeProp,
-    ) -> Result<(Uuid, Uuid), RegistryError> {
+    ) -> Result<(), RegistryError> {
         let from_idx = self.get_idx(from)?;
         let to_idx = self.get_idx(to)?;
-        // let edge_type = EdgeType::from_entity_types(
-        //     self.graph[from_idx].entity_type,
-        //     self.graph[to_idx].entity_type,
-        // )?;
         debug!(
             "Connecting '{}' and '{}', edge type: {:?}",
             self.graph
@@ -518,54 +513,38 @@ where
                 .unwrap_or_default(),
             edge_type,
         );
-        Ok((
-            match self
-                .graph
-                .edges_connecting(from_idx, to_idx)
-                .find(|e| e.weight().edge_type == edge_type)
-            {
-                Some(e) => {
-                    debug!("Connection already exists");
-                    e.weight().id
-                }
-                None => {
-                    let id = Uuid::new_v4();
-                    self.insert_edge(
-                        id,
-                        edge_type,
-                        from_idx,
-                        to_idx,
-                        from,
-                        to,
-                        properties.clone(),
-                    );
-                    id
-                }
-            },
-            match self
-                .graph
-                .edges_connecting(to_idx, from_idx)
-                .find(|e| e.weight().edge_type == edge_type.reflection())
-            {
-                Some(e) => {
-                    debug!("Connection already exists");
-                    e.weight().id
-                }
-                None => {
-                    let id = Uuid::new_v4();
-                    self.insert_edge(
-                        id,
-                        edge_type.reflection(),
-                        to_idx,
-                        from_idx,
-                        to,
-                        from,
-                        properties.reflection(),
-                    );
-                    id
-                }
-            },
-        ))
+        match self
+            .graph
+            .edges_connecting(from_idx, to_idx)
+            .find(|e| e.weight().edge_type == edge_type)
+        {
+            Some(e) => {
+                debug!("Connection already exists, {:?}", e);
+            }
+            None => {
+                self.insert_edge(edge_type, from_idx, to_idx, from, to, properties.clone());
+            }
+        };
+        match self
+            .graph
+            .edges_connecting(to_idx, from_idx)
+            .find(|e| e.weight().edge_type == edge_type.reflection())
+        {
+            Some(e) => {
+                debug!("Connection already exists, {:?}", e);
+            }
+            None => {
+                self.insert_edge(
+                    edge_type.reflection(),
+                    to_idx,
+                    from_idx,
+                    to,
+                    from,
+                    properties.reflection(),
+                );
+            }
+        };
+        Ok(())
     }
 
     pub(crate) fn get_idx(&self, uuid: Uuid) -> Result<NodeIndex, RegistryError> {
@@ -616,7 +595,6 @@ where
     ) -> Result<NodeIndex, RegistryError> {
         let entity = Entity {
             id,
-            etag: Uuid::new_v4(),
             entity_type,
             name,
             qualified_name: qualified_name.clone(),
@@ -638,7 +616,6 @@ where
 
     fn insert_edge(
         &mut self,
-        id: Uuid,
         edge_type: EdgeType,
         from_idx: NodeIndex,
         to_idx: NodeIndex,
@@ -648,7 +625,7 @@ where
     ) -> EdgeIndex {
         let mut from = self.graph.node_weight(from_idx).unwrap().to_owned();
         let mut to = self.graph.node_weight(to_idx).unwrap().to_owned();
-        EntityProp::connect(&mut from, from_uuid, &mut to, to_uuid, edge_type, id);
+        EntityProp::connect(&mut from, from_uuid, &mut to, to_uuid, edge_type);
         self.graph
             .node_weight_mut(from_idx)
             .map(|w| w.properties = from.properties);
@@ -660,7 +637,6 @@ where
             from_idx,
             to_idx,
             Edge {
-                id,
                 from: from_uuid,
                 to: to_uuid,
                 edge_type,
@@ -709,11 +685,17 @@ mod tests {
             Ok(DummyEntityProp)
         }
 
-        fn new_anchor_feature(_id: Uuid, _definition: &AnchorFeatureDef) -> Result<Self, RegistryError> {
+        fn new_anchor_feature(
+            _id: Uuid,
+            _definition: &AnchorFeatureDef,
+        ) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
         }
 
-        fn new_derived_feature(_id: Uuid, _definition: &DerivedFeatureDef) -> Result<Self, RegistryError> {
+        fn new_derived_feature(
+            _id: Uuid,
+            _definition: &DerivedFeatureDef,
+        ) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
         }
 
@@ -723,7 +705,6 @@ mod tests {
             to: &mut Entity<Self>,
             _to_id: Uuid,
             edge_type: EdgeType,
-            _edge_id: Uuid,
         ) {
             debug!(
                 "Connecting: '{}' '{:?}' '{}'",
@@ -737,7 +718,6 @@ mod tests {
             to: &mut Entity<Self>,
             _to_id: Uuid,
             edge_type: EdgeType,
-            _edge_id: Uuid,
         ) {
             debug!(
                 "Disconnecting: '{}' '{:?}' '{}'",
@@ -747,7 +727,7 @@ mod tests {
     }
 
     impl EdgePropMutator for DummyEdgeProp {
-        fn new(_edge_id: Uuid, _from_id: Uuid, _to_id: Uuid, _edge_type: EdgeType) -> Self {
+        fn new(_from_id: Uuid, _to_id: Uuid, _edge_type: EdgeType) -> Self {
             DummyEdgeProp
         }
 
@@ -1238,10 +1218,10 @@ mod tests {
         // Now graph should have 3 nodes and 3 edges
 
         // This should fail as source1 is used by anchor1
-        assert!(r.delete_entity(src1).await.is_err());
+        assert!(r.delete_entity_by_id(src1).await.is_err());
 
         // This works
-        r.delete_entity(an1).await.unwrap();
+        r.delete_entity_by_id(an1).await.unwrap();
 
         // Now only edges between project1 and source1 remain
         assert_eq!(r.graph.edge_count(), 2);
@@ -1276,7 +1256,7 @@ mod tests {
         });
         println!("-----------------------------");
         r.graph.edge_weights().for_each(|w| {
-            println!("insert into edges (edge_id, from_id, to_id, edge_type) values ('{}', '{}', '{}', '{:?}');", w.id, w.from, w.to, w.edge_type);
+            println!("insert into edges (edge_id, from_id, to_id, edge_type) values ('{}', '{}', '{}', '{:?}');", Uuid::new_v4(), w.from, w.to, w.edge_type);
         });
     }
 }

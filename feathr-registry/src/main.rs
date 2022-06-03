@@ -129,11 +129,12 @@ impl FeathrApi {
         mut def: Json<ProjectDef>,
     ) -> poem::Result<Json<CreationResponse>> {
         def.0.qualified_name = def.0.name.clone();
-        let guid = data
+        let guid = Uuid::new_v4();
+        data
             .registry
             .write()
             .await
-            .new_project(&def.0.try_into()?)
+            .new_project(guid, &def.0.try_into()?)
             .await
             .map_api_error()?;
         Ok(Json(guid.into()))
@@ -294,11 +295,12 @@ impl FeathrApi {
         let id = data.get_id(project.0).await?;
         let project_name = data.get_name(id).await?;
         def.0.qualified_name = format!("{}__{}", project_name, def.0.name);
-        let guid = data
+        let guid = Uuid::new_v4();
+        data
             .registry
             .write()
             .await
-            .new_source(id, &def.0.try_into()?)
+            .new_source(id, guid, &def.0.try_into()?)
             .await
             .map_api_error()?;
         Ok(Json(guid.into()))
@@ -386,11 +388,12 @@ impl FeathrApi {
         let id = data.get_id(project.0).await?;
         let project_name = data.get_name(id).await?;
         def.0.qualified_name = format!("{}__{}", project_name, def.0.name);
-        let guid = data
+        let guid = Uuid::new_v4();
+        data
             .registry
             .write()
             .await
-            .new_derived_feature(id, &def.0.try_into()?)
+            .new_derived_feature(id, guid, &def.0.try_into()?)
             .await
             .map_api_error()?;
         Ok(Json(guid.into()))
@@ -449,11 +452,12 @@ impl FeathrApi {
         let id = data.get_id(project.0).await?;
         let project_name = data.get_name(id).await?;
         def.0.qualified_name = format!("{}__{}", project_name, def.0.name);
-        let guid = data
+        let guid = Uuid::new_v4();
+        data
             .registry
             .write()
             .await
-            .new_anchor(id, &def.0.try_into()?)
+            .new_anchor(id, guid, &def.0.try_into()?)
             .await
             .map_api_error()?;
         Ok(Json(guid.into()))
@@ -556,11 +560,12 @@ impl FeathrApi {
         let project_name = data.get_name(project_id).await?;
         let anchor_name = data.get_name(anchor_id).await?;
         def.0.qualified_name = format!("{}__{}__{}", project_name, anchor_name, def.0.name);
-        let guid = data
+        let guid = Uuid::new_v4();
+        data
             .registry
             .write()
             .await
-            .new_anchor_feature(project_id, anchor_id, &def.0.try_into().log()?)
+            .new_anchor_feature(project_id, anchor_id, guid, &def.0.try_into().log()?)
             .await
             .map_api_error()?;
         Ok(Json(guid.into()))

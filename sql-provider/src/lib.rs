@@ -5,7 +5,7 @@ mod fts;
 #[cfg(any(mock, test))]
 mod mock;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 use async_trait::async_trait;
@@ -51,8 +51,9 @@ where
     async fn get_entity_by_qualified_name(
         &self,
         qualified_name: &str,
-    ) -> Option<Entity<EntityProp>> {
+    ) -> Result<Entity<EntityProp>, RegistryError> {
         self.get_entity_by_name(qualified_name)
+            .ok_or_else(|| RegistryError::EntityNotFound(qualified_name.to_string()))
     }
 
     /**
@@ -61,13 +62,13 @@ where
     async fn get_entities(
         &self,
         uuids: HashSet<Uuid>,
-    ) -> Result<HashMap<Uuid, Entity<EntityProp>>, RegistryError> {
+    ) -> Result<Vec<Entity<EntityProp>>, RegistryError> {
         Ok(uuids
             .into_iter()
             .filter_map(|id| {
                 self.get_idx(id)
                     .ok()
-                    .map(|idx| self.graph.node_weight(idx).cloned().map(|w| (id, w)))
+                    .map(|idx| self.graph.node_weight(idx).cloned())
                     .flatten()
             })
             .collect())
@@ -153,9 +154,12 @@ where
     }
 
     // Create new project
-    async fn new_project(&mut self, definition: &ProjectDef) -> Result<Uuid, RegistryError> {
+    async fn new_project(
+        &mut self,
+        id: Uuid,
+        definition: &ProjectDef,
+    ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let id = Uuid::new_v4();
         let prop = EntityProp::new_project(id, &definition)?;
         self.insert_entity(
             id,
@@ -170,11 +174,11 @@ where
     // Create new source under specified project
     async fn new_source(
         &mut self,
+        id: Uuid,
         project_id: Uuid,
         definition: &SourceDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let id = Uuid::new_v4();
         let prop = EntityProp::new_source(id, &definition)?;
         let source_id = self
             .insert_entity(
@@ -190,7 +194,7 @@ where
             project_id,
             source_id,
             EdgeType::Contains,
-            EdgeProp::new(Uuid::new_v4(), project_id, source_id, EdgeType::Contains),
+            EdgeProp::new(project_id, source_id, EdgeType::Contains),
         )?;
 
         Ok(source_id)
@@ -199,11 +203,11 @@ where
     // Create new anchor under specified project
     async fn new_anchor(
         &mut self,
+        id: Uuid,
         project_id: Uuid,
         definition: &AnchorDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let id = Uuid::new_v4();
         let prop = EntityProp::new_anchor(id, &definition)?;
         let anchor_id = self
             .insert_entity(
@@ -219,7 +223,7 @@ where
             project_id,
             anchor_id,
             EdgeType::Contains,
-            EdgeProp::new(Uuid::new_v4(), project_id, anchor_id, EdgeType::Contains),
+            EdgeProp::new(project_id, anchor_id, EdgeType::Contains),
         )?;
 
         self.connect(
@@ -227,7 +231,6 @@ where
             definition.source_id,
             EdgeType::Consumes,
             EdgeProp::new(
-                Uuid::new_v4(),
                 anchor_id,
                 definition.source_id,
                 EdgeType::Consumes,
@@ -240,12 +243,12 @@ where
     // Create new anchor feature under specified anchor
     async fn new_anchor_feature(
         &mut self,
+        id: Uuid,
         project_id: Uuid,
         anchor_id: Uuid,
         definition: &AnchorFeatureDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let id = Uuid::new_v4();
         let prop = EntityProp::new_anchor_feature(id, &definition)?;
         let feature_id = self
             .insert_entity(
@@ -261,14 +264,14 @@ where
             project_id,
             feature_id,
             EdgeType::Contains,
-            EdgeProp::new(Uuid::new_v4(), project_id, feature_id, EdgeType::Contains),
+            EdgeProp::new(project_id, feature_id, EdgeType::Contains),
         )?;
 
         self.connect(
             anchor_id,
             feature_id,
             EdgeType::Contains,
-            EdgeProp::new(Uuid::new_v4(), anchor_id, feature_id, EdgeType::Contains),
+            EdgeProp::new(anchor_id, feature_id, EdgeType::Contains),
         )?;
 
         // Anchor feature also consumes source of the anchor
@@ -278,7 +281,7 @@ where
                 feature_id,
                 s.id,
                 EdgeType::Consumes,
-                EdgeProp::new(Uuid::new_v4(), feature_id, s.id, EdgeType::Consumes),
+                EdgeProp::new(feature_id, s.id, EdgeType::Consumes),
             )?;
         }
 
@@ -288,11 +291,11 @@ where
     // Create new derived feature under specified project
     async fn new_derived_feature(
         &mut self,
+        id: Uuid,
         project_id: Uuid,
         definition: &DerivedFeatureDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let id = Uuid::new_v4();
         let prop = EntityProp::new_derived_feature(id, &definition)?;
         let feature_id = self
             .insert_entity(
@@ -308,7 +311,7 @@ where
             project_id,
             feature_id,
             EdgeType::Contains,
-            EdgeProp::new(Uuid::new_v4(), project_id, feature_id, EdgeType::Contains),
+            EdgeProp::new(project_id, feature_id, EdgeType::Contains),
         )?;
 
         for &id in definition
@@ -320,10 +323,14 @@ where
                 feature_id,
                 id,
                 EdgeType::Consumes,
-                EdgeProp::new(Uuid::new_v4(), feature_id, id, EdgeType::Consumes),
+                EdgeProp::new(feature_id, id, EdgeType::Consumes),
             )?;
         }
 
         Ok(feature_id)
+    }
+
+    async fn delete_entity(&mut self, id: Uuid) -> Result<(), RegistryError> {
+        self.delete_entity_by_id(id).await
     }
 }
