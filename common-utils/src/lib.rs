@@ -108,6 +108,7 @@ pub fn init_logger() {
             "registry_cli",
             "registry_provider",
             "sql_provider",
+            "raft_registry",
         ];
         let module_logs = modules.into_iter().map(|m| format!("{}=debug", m)).collect::<Vec<_>>().join(",");
         let rust_log = format!("info,tantivy=warn,tiberius=warn,{}", module_logs);

@@ -1,6 +1,7 @@
 mod database;
 mod db_registry;
 mod fts;
+mod serdes;
 
 #[cfg(any(mock, test))]
 mod mock;

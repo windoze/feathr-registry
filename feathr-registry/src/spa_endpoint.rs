@@ -8,12 +8,6 @@ use poem::{
     IntoResponse, Request, Response, Result,
 };
 
-/// Static files handling service.
-///
-/// # Errors
-///
-/// - [`StaticFileError`]
-#[cfg_attr(docsrs, doc(cfg(feature = "static-files")))]
 pub struct SpaEndpoint {
     path: PathBuf,
     index_path: PathBuf,

@@ -6,6 +6,9 @@ members = [
     "registry-provider",
     "atlas-provider",
     "sql-provider",
+    "registry-api",
     "registry-cli",
+    "raft-registry",
+    "registry-app",
 ]
 

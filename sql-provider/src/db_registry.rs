@@ -10,6 +10,7 @@ use petgraph::{
     Directed, Direction,
 };
 use registry_provider::*;
+use serde::Deserialize;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -28,7 +29,7 @@ impl From<FtsError> for RegistryError {
  * Registry will call this interface whenever the graph state has been changed.
  */
 #[async_trait]
-pub trait ExternalStorage<EntityProp>: Sync + Send
+pub trait ExternalStorage<EntityProp>: Sync + Send + Debug
 where
     EntityProp: Clone + Debug + PartialEq + Eq + ToDocString,
 {
@@ -83,6 +84,7 @@ where
     ) -> Result<(), RegistryError>;
 }
 
+#[derive(Debug)]
 pub struct Registry<EntityProp, EdgeProp>
 where
     EntityProp: Clone + Debug + PartialEq + Eq + ToDocString,
@@ -108,6 +110,67 @@ where
 
     // TODO:
     pub external_storage: Vec<Arc<RwLock<dyn ExternalStorage<EntityProp>>>>,
+}
+
+impl<EntityProp, EdgeProp> Default for Registry<EntityProp, EdgeProp>
+where
+    EntityProp: Clone + Debug + PartialEq + Eq + ToDocString,
+    EdgeProp: Clone + Debug + PartialEq + Eq,
+{
+    fn default() -> Self {
+        Self {
+            graph: Default::default(),
+            node_id_map: Default::default(),
+            name_id_map: Default::default(),
+            deleted: Default::default(),
+            entry_points: Default::default(),
+            fts_index: Default::default(),
+            external_storage: Default::default(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+impl<'de, EntityProp, EdgeProp> Registry<EntityProp, EdgeProp>
+where
+    EntityProp: Clone + Debug + PartialEq + Eq + ToDocString + Deserialize<'de>,
+    EdgeProp: Clone + Debug + PartialEq + Eq + Deserialize<'de>,
+{
+    pub fn from_content(
+        graph: Graph<Entity<EntityProp>, Edge<EdgeProp>, Directed>,
+        deleted: HashSet<Uuid>,
+    ) -> Self {
+        let mut fts_index = FtsIndex::new();
+        graph.node_weights().for_each(|w| {
+            fts_index.add_doc(w).ok();
+        });
+        let node_id_map = graph
+            .node_indices()
+            .filter_map(|idx| graph.node_weight(idx).map(|w| (w.id, idx)))
+            .collect();
+        let name_id_map = graph
+            .node_weights()
+            .map(|w| (w.qualified_name.to_owned(), w.id))
+            .collect();
+        let entry_points = graph
+            .node_indices()
+            .filter(|&idx| {
+                graph
+                    .node_weight(idx)
+                    .map(|w| (w.entity_type.is_entry_point()))
+                    .unwrap_or(false)
+            })
+            .collect();
+        Self {
+            graph,
+            node_id_map,
+            name_id_map,
+            deleted,
+            entry_points,
+            fts_index,
+            external_storage: Default::default(),
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -736,6 +799,7 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
     pub struct DummyExternalStorage;
 
     #[async_trait]

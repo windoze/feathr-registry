@@ -34,7 +34,6 @@ pub enum FtsError {
     QueryParseError(#[from] tantivy::query::QueryParserError),
 }
 
-// #[derive(Clone)]
 pub struct FtsIndex {
     _schema: Schema,
     reader: IndexReader,
@@ -46,6 +45,21 @@ pub struct FtsIndex {
     type_field: Field,
     body_field: Field,
     enabled: bool,
+}
+
+impl Debug for FtsIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FtsIndex")
+            .field("_schema", &self._schema)
+            .field("index", &self.index)
+            .field("name_field", &self.name_field)
+            .field("id_field", &self.id_field)
+            .field("scopes_field", &self.scopes_field)
+            .field("type_field", &self.type_field)
+            .field("body_field", &self.body_field)
+            .field("enabled", &self.enabled)
+            .finish()
+    }
 }
 
 impl FtsIndex {

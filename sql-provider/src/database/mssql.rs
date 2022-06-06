@@ -140,6 +140,7 @@ pub async fn load_registry() -> Result<Registry<EntityProperty, EdgeProperty>, a
     Ok(registry)
 }
 
+#[derive(Debug)]
 pub struct MsSqlStorage {
     entity_table: String,
     edge_table: String,
