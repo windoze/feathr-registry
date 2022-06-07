@@ -19,12 +19,11 @@ percent-encoding = "2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1.8"
+clap = { version = "3", features = ["derive", "env"] }
+openraft = { git = "https://github.com/windoze/openraft.git", features = ["serde"] }
 
 common-utils = { path = "../common-utils" }
 registry-provider = { path = "../registry-provider" }
-
-sql-provider = { path = "../sql-provider", optional = true }
-
-[features]
-default = ["sqlbackend"]
-sqlbackend = ["sql-provider"]
+sql-provider = { path = "../sql-provider" }
+registry-api = { path = "../registry-api" }
+raft-registry = { path = "../raft-registry" }

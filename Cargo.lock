@@ -775,11 +775,15 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "clap",
  "common-utils",
  "log",
+ "openraft",
  "percent-encoding",
  "poem",
  "poem-openapi",
+ "raft-registry",
+ "registry-api",
  "registry-provider",
  "serde",
  "serde_json",
@@ -2219,32 +2223,6 @@ dependencies = [
  "sql-provider",
  "thiserror",
  "tokio",
- "uuid 1.1.1",
-]
-
-[[package]]
-name = "registry-app"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "clap",
- "common-utils",
- "log",
- "openraft",
- "percent-encoding",
- "poem",
- "poem-openapi",
- "raft-registry",
- "registry-api",
- "registry-provider",
- "serde",
- "serde_json",
- "sql-provider",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tracing-subscriber",
  "uuid 1.1.1",
 ]
 
