@@ -1,10 +1,15 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use log::debug;
 use log::trace;
 use openraft::Config;
 use openraft::EntryPayload;
+use openraft::Node;
+use openraft::Raft;
+use openraft::SnapshotPolicy;
 use openraft::error::CheckIsLeaderError;
+use openraft::error::InitializeError;
 use openraft::raft::ClientWriteRequest;
 use registry_api::ApiError;
 use registry_api::FeathrApiProvider;
@@ -13,9 +18,11 @@ use registry_api::FeathrApiResponse;
 
 use crate::ManagementCode;
 use crate::RegistryClient;
+use crate::RegistryNetwork;
 use crate::RegistryNodeId;
 use crate::RegistryRaft;
 use crate::RegistryStore;
+use crate::Restore;
 
 // Representation of an application state. This struct can be shared around to share
 // instances of raft, store and more.
@@ -30,6 +37,46 @@ pub struct RaftRegistryApp {
 }
 
 impl RaftRegistryApp {
+    pub async fn new(node_id: RegistryNodeId, addr: String, cfg: crate::Config) -> Self {
+        // Create a configuration for the raft instance.
+    
+        let mut config = Config::default().validate().unwrap();
+        config.snapshot_policy = SnapshotPolicy::LogsSinceLast(500);
+        config.max_applied_log_to_keep = 20000;
+        config.install_snapshot_timeout = 400;
+    
+        let config = Arc::new(config);
+
+        // Create a instance of where the Raft data will be stored.
+        let es = RegistryStore::open_create(node_id, cfg.clone());
+        
+        // es.load_latest_snapshot().await.unwrap();
+    
+        let mut store = Arc::new(es);
+    
+        store.restore().await;
+    
+        // Create the network layer that will connect and communicate the raft instances and
+        // will be used in conjunction with the store created above.
+        let network = RegistryNetwork::new(cfg);
+    
+        // Create a local raft instance.
+        let raft = Raft::new(node_id, config.clone(), network, store.clone());
+    
+        let forwarder = RegistryClient::new(node_id, addr.clone(), store.get_management_code());
+    
+        // Create an application that will store all the instances created above, this will
+        // be later used on the web services.
+        RaftRegistryApp {
+            id: node_id,
+            addr,
+            raft,
+            store,
+            config,
+            forwarder,
+        }
+    }
+    
     pub async fn check_code(&self, code: Option<ManagementCode>) -> poem::Result<()> {
         debug!("Checking code {:?}", code);
         match self.store.get_management_code() {
@@ -47,6 +94,18 @@ impl RaftRegistryApp {
             }
             None => return Ok(()),
         }
+    }
+
+    pub async fn init(&self) -> Result<(), InitializeError<RegistryNodeId>> {
+        let mut nodes = BTreeMap::new();
+        nodes.insert(
+            self.id,
+            Node {
+                addr: self.addr.clone(),
+                data: Default::default(),
+            },
+        );
+        self.raft.initialize(nodes).await
     }
 
     pub async fn request(

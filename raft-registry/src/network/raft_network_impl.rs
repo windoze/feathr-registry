@@ -28,14 +28,14 @@ use crate::RegistryTypeConfig;
 
 pub struct RegistryNetwork {
     pub clients: Arc<HashMap<String, reqwest::Client>>,
-    code: Option<String>,
+    config: Arc<crate::Config>,
 }
 
 impl RegistryNetwork {
-    pub fn new(code: Option<String>) -> Self {
+    pub fn new(config: crate::Config) -> Self {
         Self {
             clients: Arc::new(HashMap::new()),
-            code,
+            config: Arc::new(config),
         }
     }
 
@@ -63,7 +63,7 @@ impl RegistryNetwork {
         let resp = client
             .post(url)
             .apply(|r| {
-                match &self.code {
+                match &self.config.management_code {
                     Some(c) => r.header(MANAGEMENT_CODE_HEADER_NAME, c),
                     None => r,
                 }
@@ -88,10 +88,8 @@ impl RaftNetworkFactory<RegistryTypeConfig> for RegistryNetwork {
     type Network = RegistryNetworkConnection;
 
     async fn connect(&mut self, target: RegistryNodeId, node: Option<&Node>) -> Self::Network {
-        // TODO: Global config instance
-        let config = crate::Config::default();
         RegistryNetworkConnection {
-            owner: RegistryNetwork::new(config.management_code),
+            owner: RegistryNetwork::new(self.config.as_ref().to_owned()),
             target,
             target_node: node.cloned(),
         }

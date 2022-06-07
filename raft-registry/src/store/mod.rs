@@ -76,10 +76,8 @@ fn get_sled_db(config: Config, node_id: RegistryNodeId) -> Db {
 }
 
 impl RegistryStore {
-    pub fn open_create(node_id: RegistryNodeId) -> RegistryStore {
+    pub fn open_create(node_id: RegistryNodeId, config: Config) -> RegistryStore {
         tracing::info!("open_create, node_id: {}", node_id);
-
-        let config = Config::default();
 
         let db = get_sled_db(config.clone(), node_id);
 
