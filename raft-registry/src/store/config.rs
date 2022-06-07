@@ -17,6 +17,9 @@ pub struct Config {
 
     #[clap(long, env = "RAFT_SNAPSHOT_PER_EVENTS", default_value = "500")]
     pub snapshot_per_events: u32,
+
+    #[clap(long, env = "RAFT_MANAGEMENT_CODE")]
+    pub management_code: Option<String>,
 }
 
 impl Default for Config {

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 mod store;
 mod network;
 mod app;
+mod client;
 
 pub type RegistryNodeId = u64;
 
@@ -30,3 +31,4 @@ pub type RegistryRaft = Raft<RegistryTypeConfig, RegistryNetwork, Arc<RegistrySt
 pub use store::*;
 pub use network::*;
 pub use app::*;
+pub use client::RegistryClient;

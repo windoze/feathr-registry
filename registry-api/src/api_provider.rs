@@ -101,6 +101,19 @@ pub enum FeathrApiRequest {
     },
 }
 
+impl FeathrApiRequest {
+    pub fn is_writing_request(&self) -> bool {
+        matches!(
+            &self,
+            Self::CreateProject { .. }
+                | Self::CreateProjectDataSource { .. }
+                | Self::CreateProjectAnchor { .. }
+                | Self::CreateAnchorFeature { .. }
+                | Self::CreateProjectDerivedFeature { .. }
+        )
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FeathrApiResponse {
     Error(ApiError),
@@ -247,7 +260,6 @@ where
     T: RegistryProvider<EntityProperty, EdgeProperty> + Sync + Send,
 {
     async fn request(&mut self, request: FeathrApiRequest) -> FeathrApiResponse {
-
         async fn get_id<T>(t: &T, id_or_name: String) -> Result<Uuid, RegistryError>
         where
             T: RegistryProvider<EntityProperty, EdgeProperty>,

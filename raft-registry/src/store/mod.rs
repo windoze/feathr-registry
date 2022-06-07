@@ -12,11 +12,11 @@ use async_trait::async_trait;
 use openraft::{
     storage::{LogState, Snapshot},
     AnyError, EffectiveMembership, Entry, EntryPayload, ErrorSubject, ErrorVerb, LogId,
-    RaftLogReader, RaftSnapshotBuilder, RaftStorage, SnapshotMeta, StorageError, StorageIOError,
-    Vote, StateMachineChanges,
+    RaftLogReader, RaftSnapshotBuilder, RaftStorage, SnapshotMeta, StateMachineChanges,
+    StorageError, StorageIOError, Vote,
 };
-use registry_api::{FeathrApiResponse, FeathrApiProvider};
-use registry_provider::{EntityProperty, EdgeProperty};
+use registry_api::{FeathrApiProvider, FeathrApiResponse};
+use registry_provider::{EdgeProperty, EntityProperty};
 use serde::{Deserialize, Serialize};
 use sled::{Db, IVec};
 use sql_provider::Registry;
@@ -101,6 +101,10 @@ impl RegistryStore {
             snapshot_idx: Arc::new(Mutex::new(0)),
             current_snapshot,
         }
+    }
+
+    pub fn get_management_code(&self) -> Option<String> {
+        self.config.management_code.clone()
     }
 }
 
@@ -409,8 +413,8 @@ impl RaftStorage<RegistryTypeConfig> for Arc<RegistryStore> {
             match entry.payload {
                 EntryPayload::Blank => res.push(FeathrApiResponse::Unit),
                 EntryPayload::Normal(ref req) => {
-                    res.push(self.state_machine.write().await.registry.request(req.to_owned()).await)
-                },
+                    res.push(sm.registry.request(req.to_owned()).await)
+                }
                 EntryPayload::Membership(ref mem) => {
                     sm.last_membership = EffectiveMembership::new(Some(entry.log_id), mem.clone());
                     res.push(FeathrApiResponse::Unit)
@@ -473,10 +477,8 @@ impl RaftStorage<RegistryTypeConfig> for Arc<RegistryStore> {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn get_current_snapshot(
         &mut self,
-    ) -> Result<
-        Option<Snapshot<RegistryNodeId, Self::SnapshotData>>,
-        StorageError<RegistryNodeId>,
-    > {
+    ) -> Result<Option<Snapshot<RegistryNodeId, Self::SnapshotData>>, StorageError<RegistryNodeId>>
+    {
         tracing::debug!("get_current_snapshot: start");
 
         match &*self.current_snapshot.read().await {

@@ -14,6 +14,9 @@ pub enum ApiError {
     BadRequest(String),
 
     #[error("{0}")]
+    Forbidden(String),
+
+    #[error("{0}")]
     InternalError(String),
 }
 
@@ -22,6 +25,7 @@ impl ResponseError for ApiError {
         match &self {
             ApiError::NotFoundError(_) => StatusCode::NOT_FOUND,
             ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

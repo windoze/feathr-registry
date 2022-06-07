@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_utils::Appliable;
+use log::debug;
 use openraft::error::AppendEntriesError;
 use openraft::error::InstallSnapshotError;
 use openraft::error::NetworkError;
@@ -20,17 +22,20 @@ use openraft::RaftNetworkFactory;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::MANAGEMENT_CODE_HEADER_NAME;
 use crate::RegistryNodeId;
 use crate::RegistryTypeConfig;
 
 pub struct RegistryNetwork {
     pub clients: Arc<HashMap<String, reqwest::Client>>,
+    code: Option<String>,
 }
 
 impl RegistryNetwork {
-    pub fn new() -> Self {
+    pub fn new(code: Option<String>) -> Self {
         Self {
             clients: Arc::new(HashMap::new()),
+            code,
         }
     }
 
@@ -54,8 +59,15 @@ impl RegistryNetwork {
 
         let client = clients.entry(url.clone()).or_insert(reqwest::Client::new());
 
+        debug!("send_rpc: url is `{}`", url);
         let resp = client
             .post(url)
+            .apply(|r| {
+                match &self.code {
+                    Some(c) => r.header(MANAGEMENT_CODE_HEADER_NAME, c),
+                    None => r,
+                }
+            })
             .json(&req)
             .send()
             .await
@@ -76,8 +88,10 @@ impl RaftNetworkFactory<RegistryTypeConfig> for RegistryNetwork {
     type Network = RegistryNetworkConnection;
 
     async fn connect(&mut self, target: RegistryNodeId, node: Option<&Node>) -> Self::Network {
+        // TODO: Global config instance
+        let config = crate::Config::default();
         RegistryNetworkConnection {
-            owner: RegistryNetwork::new(),
+            owner: RegistryNetwork::new(config.management_code),
             target,
             target_node: node.cloned(),
         }

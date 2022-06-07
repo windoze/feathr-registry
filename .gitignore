@@ -4,3 +4,4 @@
 .env*
 /ui
 /.vscode
+test*.log

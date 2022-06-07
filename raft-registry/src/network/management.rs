@@ -1,15 +1,26 @@
-use std::collections::{BTreeSet, BTreeMap};
+use std::collections::{BTreeMap, BTreeSet};
 
-use openraft::{Node, RaftMetrics, error::Infallible};
-use poem::{handler, web::{Data, Json}, IntoResponse, Route, post, get};
+use openraft::{
+    error::{CheckIsLeaderError, Infallible},
+    raft::ClientWriteRequest,
+    EntryPayload, Node, RaftMetrics,
+};
+use poem::{
+    get, handler, post,
+    web::{Data, Json, TypedHeader},
+    IntoResponse, Route,
+};
+use registry_api::{ApiError, FeathrApiProvider, FeathrApiRequest, FeathrApiResponse};
 
-use crate::{RaftRegistryApp, RegistryNodeId, RegistryTypeConfig};
+use crate::{ManagementCode, RaftRegistryApp, RegistryNodeId, RegistryTypeConfig};
 
 #[handler]
 pub async fn add_learner(
     app: Data<&RaftRegistryApp>,
+    code: Option<TypedHeader<ManagementCode>>,
     req: Json<(RegistryNodeId, String)>,
 ) -> poem::Result<impl IntoResponse> {
+    app.check_code(code.map(|c| c.0)).await?;
     let node_id = req.0 .0;
     let node = Node {
         addr: req.0 .1.clone(),
@@ -23,15 +34,21 @@ pub async fn add_learner(
 #[handler]
 pub async fn change_membership(
     app: Data<&RaftRegistryApp>,
+    code: Option<TypedHeader<ManagementCode>>,
     req: Json<BTreeSet<RegistryNodeId>>,
 ) -> poem::Result<impl IntoResponse> {
+    app.check_code(code.map(|c| c.0)).await?;
     let res = app.raft.change_membership(req.0, true, false).await;
     Ok(Json(res))
 }
 
 /// Initialize a single-node cluster.
 #[handler]
-pub async fn init(app: Data<&RaftRegistryApp>) -> poem::Result<impl IntoResponse> {
+pub async fn init(
+    app: Data<&RaftRegistryApp>,
+    code: Option<TypedHeader<ManagementCode>>,
+) -> poem::Result<impl IntoResponse> {
+    app.check_code(code.map(|c| c.0)).await?;
     let mut nodes = BTreeMap::new();
     nodes.insert(
         app.id,
@@ -46,11 +63,82 @@ pub async fn init(app: Data<&RaftRegistryApp>) -> poem::Result<impl IntoResponse
 
 /// Get the latest metrics of the cluster
 #[handler]
-pub async fn metrics(app: Data<&RaftRegistryApp>) -> poem::Result<impl IntoResponse> {
+pub async fn metrics(
+    app: Data<&RaftRegistryApp>,
+    code: Option<TypedHeader<ManagementCode>>,
+) -> poem::Result<impl IntoResponse> {
+    app.check_code(code.map(|c| c.0)).await?;
     let metrics = app.raft.metrics().borrow().clone();
 
     let res: Result<RaftMetrics<RegistryTypeConfig>, Infallible> = Ok(metrics);
     Ok(Json(res))
+}
+
+/**
+ * Handle request locally, may get stale response
+ */
+#[handler]
+pub async fn handle_request(
+    app: Data<&RaftRegistryApp>,
+    code: Option<TypedHeader<ManagementCode>>,
+    req: Json<FeathrApiRequest>,
+) -> poem::Result<impl IntoResponse> {
+    app.check_code(code.map(|c| c.0)).await?;
+
+    if req.0.is_writing_request() {
+        return Err(ApiError::BadRequest(
+            "Updating requests must be submitted to the Raft leader".to_string(),
+        ))?;
+    }
+
+    let value = app
+        .store
+        .state_machine
+        .write()
+        .await
+        .registry
+        .request(req.0)
+        .await;
+    let res: Result<FeathrApiResponse, Infallible> = Ok(value);
+    Ok(Json(res))
+}
+
+/**
+ * Handle request only if this node is the leader, return error otherwise
+ */
+#[handler]
+pub async fn handle_leader_request(
+    app: Data<&RaftRegistryApp>,
+    code: Option<TypedHeader<ManagementCode>>,
+    req: Json<FeathrApiRequest>,
+) -> poem::Result<impl IntoResponse> {
+    app.check_code(code.map(|c| c.0)).await?;
+
+    let ret = app.raft.is_leader().await;
+    match ret {
+        Ok(_) => {
+            // Only writing requests need to go to raft state machine
+            let value = if req.0.is_writing_request() {
+                let request = ClientWriteRequest::new(EntryPayload::Normal(req.0));
+                app.raft
+                    .client_write(request)
+                    .await
+                    .map_err(|e| ApiError::InternalError(format!("{:?}", e)))?
+                    .data
+            } else {
+                app.store
+                    .state_machine
+                    .write()
+                    .await
+                    .registry
+                    .request(req.0)
+                    .await
+            };
+            let res: Result<FeathrApiResponse, CheckIsLeaderError<RegistryNodeId>> = Ok(value);
+            Ok(Json(res))
+        }
+        Err(e) => Ok(Json(Err(e))),
+    }
 }
 
 pub fn management_routes(route: Route) -> Route {
@@ -59,4 +147,6 @@ pub fn management_routes(route: Route) -> Route {
         .at("/change-membership", post(change_membership))
         .at("/init", post(init))
         .at("/metrics", get(metrics))
+        .at("/handle-request", post(handle_request))
+        .at("/handle-leader-request", post(handle_leader_request))
 }

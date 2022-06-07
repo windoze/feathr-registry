@@ -17,6 +17,13 @@ kill() {
     fi
 }
 
+if [ "xxx${RAFT_MANAGEMENT_CODE}" == "xxx" ]; then
+    export MGMT_HDR="a: b"
+else
+    export MGMT_HDR="x-registry-management-code: ${RAFT_MANAGEMENT_CODE}"
+fi
+
+
 rpc() {
     local uri=$1
     local body="$2"
@@ -25,9 +32,9 @@ rpc() {
 
     {
         if [ ".$body" = "." ]; then
-            curl --silent "127.0.0.1:$uri"
+            curl -H"${MGMT_HDR}" --silent "127.0.0.1:$uri"
         else
-            curl --silent "127.0.0.1:$uri" -H "Content-Type: application/json" -d "$body"
+            curl -H"${MGMT_HDR}" --silent "127.0.0.1:$uri" -H "Content-Type: application/json" -d "$body"
         fi
     } | {
         if type jq > /dev/null 2>&1; then
@@ -41,8 +48,6 @@ rpc() {
     echo
 }
 
-#export RUST_LOG=debug 
-
 echo "Killing all running registry-app"
 
 kill
@@ -51,15 +56,15 @@ sleep 1
 
 echo "Start 3 uninitialized registry-app servers..."
 
-nohup ./target/debug/registry-app  --id 1 --http-addr 127.0.0.1:21001 > n1.log &
+nohup ./target/debug/registry-app  --id 1 --http-addr 127.0.0.1:21001 > test-n1.log &
 sleep 1
 echo "Server 1 started"
 
-nohup ./target/debug/registry-app  --id 2 --http-addr 127.0.0.1:21002 > n2.log &
+nohup ./target/debug/registry-app  --id 2 --http-addr 127.0.0.1:21002 > test-n2.log &
 sleep 1
 echo "Server 2 started"
 
-nohup ./target/debug/registry-app  --id 3 --http-addr 127.0.0.1:21003 > n3.log &
+nohup ./target/debug/registry-app  --id 3 --http-addr 127.0.0.1:21003 > test-n3.log &
 sleep 1
 echo "Server 3 started"
 sleep 1
@@ -77,6 +82,14 @@ echo "Get metrics from the leader"
 sleep 2
 echo
 rpc 21001/metrics
+sleep 1
+
+echo "Write data on leader"
+sleep 1
+echo
+rpc 21001/api/projects '{"name": "project0"}'
+sleep 1
+echo "Data written"
 sleep 1
 
 
@@ -126,10 +139,10 @@ echo
 rpc 21001/api/projects
 echo "Read from node 2"
 echo
-rpc 21001/api/projects
+rpc 21002/api/projects
 echo "Read from node 3"
 echo
-rpc 21001/api/projects
+rpc 21003/api/projects
 
 ##############################################################{
 echo "Write data on leader"
@@ -148,10 +161,10 @@ echo
 rpc 21001/api/projects
 echo "Read from node 2"
 echo
-rpc 21001/api/projects
+rpc 21002/api/projects
 echo "Read from node 3"
 echo
-rpc 21001/api/projects
+rpc 21003/api/projects
 ##############################################################}
 
 echo "Killing all nodes in 3s..."
@@ -160,4 +173,4 @@ echo "Killing all nodes in 2s..."
 sleep 1
 echo "Killing all nodes in 1s..."
 sleep 1
-kill
+# kill
