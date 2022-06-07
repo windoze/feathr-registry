@@ -67,7 +67,7 @@ impl RegistryClient {
 
     /// Consistent Read value by key, in an inconsistent mode.
     ///
-    /// This method MUST return consitent value or CheckIsLeaderError.
+    /// This method MUST return consistent value or CheckIsLeaderError.
     pub async fn consistent_request(
         &self,
         req: &FeathrApiRequest,
