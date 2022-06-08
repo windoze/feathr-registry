@@ -87,26 +87,29 @@ async fn load_edges(
     Ok(x)
 }
 
-static POOL: OnceCell<Arc<RwLock<Pool<ConnectionManager>>>> = OnceCell::const_new();
+static POOL: OnceCell<Option<Arc<RwLock<Pool<ConnectionManager>>>>> = OnceCell::const_new();
 
-async fn init_pool() -> Arc<RwLock<Pool<ConnectionManager>>> {
+async fn init_pool() -> anyhow::Result<Arc<RwLock<Pool<ConnectionManager>>>> {
     debug!("Initializing MSSQL connection pool");
     let conn_str =
-        std::env::var("CONNECTION_STR").expect("Environment variable 'CONNECTION_STR' is not set");
-    let mgr = bb8_tiberius::ConnectionManager::build(conn_str.as_str())
-        .expect("Failed to initialize database connection");
+        std::env::var("CONNECTION_STR")?;
+    let mgr = bb8_tiberius::ConnectionManager::build(conn_str.as_str())?;
     let pool = bb8::Pool::builder()
         .max_size(5)
         .build(mgr)
-        .await
-        .expect("Failed to initialize database connection");
+        .await?;
     debug!("MSSQL connection pool initialized");
-    Arc::new(RwLock::new(pool))
+    Ok(Arc::new(RwLock::new(pool)))
 }
 
 async fn connect() -> Result<PooledConnection<'static, ConnectionManager>, anyhow::Error> {
     debug!("Acquiring MSSQL connection pool");
-    let pool = POOL.get_or_init(init_pool).await.clone();
+    let pool = POOL.get_or_init(|| async {
+        init_pool().await.ok()
+    }).await.clone()
+    .ok_or_else(|| {
+        anyhow::Error::msg("Environment variable 'CONNECTION_STR' is not set.")
+    })?;
     debug!("MSSQL connection pool acquired, connecting to database");
     let conn = pool.read().await.get_owned().await?;
     debug!("Database connected");
@@ -233,7 +236,7 @@ impl ExternalStorage<EntityProperty> for MsSqlStorage {
             .map_err(|e| RegistryError::ExternalStorageError(format!("{:?}", e)))?;
         conn.execute(
             format!(
-                r#"IF NOT EXISTS (SELECT 1 FROM {} WHERE edge_id = @P1)
+                r#"IF NOT EXISTS (SELECT 1 FROM {} WHERE from_id=@P2 and to_id=@P3 and edge_type=@P4)
                 BEGIN
                     INSERT INTO {}
                     (edge_id, from_id, to_id, edge_type)

@@ -101,7 +101,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let log_path = PathBuf::from(options.journal_path)
             .join(format!("{}-1.binlog", options.instance_prefix));
         println!("Removing journal dir `{}`", log_path.to_string_lossy());
-        remove_dir_all(&log_path)?;
+        remove_dir_all(&log_path).ok();
         read_dir(options.snapshot_path)?
             .filter(|r| {
                 if let Ok(f) = r {
