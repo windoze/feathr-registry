@@ -11,6 +11,7 @@ use registry_api::{
     AnchorDef, AnchorFeatureDef, CreationResponse, DerivedFeatureDef, Entities, Entity,
     EntityLineage, FeathrApiRequest, ProjectDef, SourceDef,
 };
+use uuid::Uuid;
 
 use crate::{RaftRegistryApp, RegistryStore, OPT_SEQ_HEADER_NAME};
 
@@ -110,10 +111,14 @@ impl FeathrApi {
         data: Data<&RaftRegistryApp>,
         def: Json<ProjectDef>,
     ) -> poem::Result<Json<CreationResponse>> {
+        let mut definition = def.0;
+        if definition.id.is_empty() {
+            definition.id = Uuid::new_v4().to_string();
+        }
         data.0
             .request(
                 None,
-                FeathrApiRequest::CreateProject { definition: def.0 },
+                FeathrApiRequest::CreateProject { definition },
             )
             .await
             .into_uuid()
@@ -231,12 +236,16 @@ impl FeathrApi {
         project: Path<String>,
         def: Json<SourceDef>,
     ) -> poem::Result<Json<CreationResponse>> {
+        let mut definition = def.0;
+        if definition.id.is_empty() {
+            definition.id = Uuid::new_v4().to_string();
+        }
         data.0
             .request(
                 None,
                 FeathrApiRequest::CreateProjectDataSource {
                     project_id_or_name: project.0,
-                    definition: def.0,
+                    definition,
                 },
             )
             .await
@@ -309,12 +318,16 @@ impl FeathrApi {
         project: Path<String>,
         def: Json<DerivedFeatureDef>,
     ) -> poem::Result<Json<CreationResponse>> {
+        let mut definition = def.0;
+        if definition.id.is_empty() {
+            definition.id = Uuid::new_v4().to_string();
+        }
         data.0
             .request(
                 None,
                 FeathrApiRequest::CreateProjectDerivedFeature {
                     project_id_or_name: project.0,
-                    definition: def.0,
+                    definition,
                 },
             )
             .await
@@ -362,12 +375,16 @@ impl FeathrApi {
         project: Path<String>,
         def: Json<AnchorDef>,
     ) -> poem::Result<Json<CreationResponse>> {
+        let mut definition = def.0;
+        if definition.id.is_empty() {
+            definition.id = Uuid::new_v4().to_string();
+        }
         data.0
             .request(
                 None,
                 FeathrApiRequest::CreateProjectAnchor {
                     project_id_or_name: project.0,
-                    definition: def.0,
+                    definition,
                 },
             )
             .await
@@ -443,13 +460,17 @@ impl FeathrApi {
         anchor: Path<String>,
         def: Json<AnchorFeatureDef>,
     ) -> poem::Result<Json<CreationResponse>> {
+        let mut definition = def.0;
+        if definition.id.is_empty() {
+            definition.id = Uuid::new_v4().to_string();
+        }
         data.0
             .request(
                 None,
                 FeathrApiRequest::CreateAnchorFeature {
                     project_id_or_name: project.0,
                     anchor_id_or_name: anchor.0,
-                    definition: def.0,
+                    definition,
                 },
             )
             .await

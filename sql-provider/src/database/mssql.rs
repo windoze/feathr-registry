@@ -208,6 +208,8 @@ impl ExternalStorage<EntityProperty> for MsSqlStorage {
             )
             .apply(|s| {
                 debug!("SQL is: {}", s);
+                debug!("Id: {}", &id);
+                debug!("Name: {}", &entity.qualified_name);
                 s
             }),
             &[

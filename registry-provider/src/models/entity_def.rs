@@ -8,6 +8,7 @@ use crate::{FeatureType, FeatureTransformation, TypedKey};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectDef {
+    pub id: Uuid,
     pub qualified_name: String,
     pub tags: HashMap<String, String>,
 }
@@ -15,6 +16,7 @@ pub struct ProjectDef {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceDef {
+    pub id: Uuid,
     pub name: String,
     pub qualified_name: String,
     #[serde(rename = "type")]
@@ -29,6 +31,7 @@ pub struct SourceDef {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnchorDef {
+    pub id: Uuid,
     pub name: String,
     pub qualified_name: String,
     pub source_id: Uuid,
@@ -38,6 +41,7 @@ pub struct AnchorDef {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnchorFeatureDef {
+    pub id: Uuid,
     pub name: String,
     pub qualified_name: String,
     pub feature_type: FeatureType,
@@ -49,6 +53,7 @@ pub struct AnchorFeatureDef {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DerivedFeatureDef {
+    pub id: Uuid,
     pub name: String,
     pub qualified_name: String,
     pub feature_type: FeatureType,

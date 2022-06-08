@@ -237,11 +237,11 @@ pub trait EntityPropMutator
 where
     Self: Clone + Debug + PartialEq + Eq + crate::fts::ToDocString,
 {
-    fn new_project(id: Uuid, definition: &ProjectDef) -> Result<Self, RegistryError>;
-    fn new_source(id: Uuid, definition: &SourceDef) -> Result<Self, RegistryError>;
-    fn new_anchor(id: Uuid, definition: &AnchorDef) -> Result<Self, RegistryError>;
-    fn new_anchor_feature(id: Uuid, definition: &AnchorFeatureDef) -> Result<Self, RegistryError>;
-    fn new_derived_feature(id: Uuid, definition: &DerivedFeatureDef)
+    fn new_project(definition: &ProjectDef) -> Result<Self, RegistryError>;
+    fn new_source(definition: &SourceDef) -> Result<Self, RegistryError>;
+    fn new_anchor(definition: &AnchorDef) -> Result<Self, RegistryError>;
+    fn new_anchor_feature(definition: &AnchorFeatureDef) -> Result<Self, RegistryError>;
+    fn new_derived_feature(definition: &DerivedFeatureDef)
         -> Result<Self, RegistryError>;
 
     /**

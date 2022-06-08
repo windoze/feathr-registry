@@ -191,21 +191,34 @@ where
         }
     }
 
-    pub(crate) async fn batch_load<NI, EI>(&mut self, entities: NI, edges: EI) -> Result<(), RegistryError>
+    pub(crate) async fn batch_load<NI, EI>(
+        &mut self,
+        entities: NI,
+        edges: EI,
+    ) -> Result<(), RegistryError>
     where
         NI: Iterator<Item = Entity<EntityProp>>,
         EI: Iterator<Item = Edge<EdgeProp>>,
     {
         for e in entities {
-            self.insert_entity(
-                e.id,
-                e.entity_type,
-                e.name.clone(),
-                e.qualified_name.clone(),
-                e.properties.clone(),
-            )
-            .await?;
-            self.fts_index.add_doc(&e)?;
+            // Insert and ignore any error. e.g. duplicated entities
+            match self
+                .insert_entity(
+                    e.id,
+                    e.entity_type,
+                    e.name.clone(),
+                    e.qualified_name.clone(),
+                    e.properties.clone(),
+                )
+                .await
+            {
+                Ok(_) => {
+                    self.fts_index.add_doc(&e)?;
+                }
+                Err(e) => {
+                    debug!("Ignored error '{:?}'", e);
+                }
+            }
         }
 
         self.fts_index.commit()?;
@@ -455,7 +468,7 @@ where
         ))
     }
 
-    pub async fn new_entity<T1, T2>(
+    pub(crate) async fn new_entity<T1, T2>(
         &mut self,
         entity_type: EntityType,
         name: T1,
@@ -754,27 +767,25 @@ mod tests {
     struct DummyEdgeProp;
 
     impl EntityPropMutator for DummyEntityProp {
-        fn new_project(_id: Uuid, _definition: &ProjectDef) -> Result<Self, RegistryError> {
+        fn new_project(_definition: &ProjectDef) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
         }
 
-        fn new_source(_id: Uuid, _definition: &SourceDef) -> Result<Self, RegistryError> {
+        fn new_source(_definition: &SourceDef) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
         }
 
-        fn new_anchor(_id: Uuid, _definition: &AnchorDef) -> Result<Self, RegistryError> {
+        fn new_anchor(_definition: &AnchorDef) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
         }
 
         fn new_anchor_feature(
-            _id: Uuid,
             _definition: &AnchorFeatureDef,
         ) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
         }
 
         fn new_derived_feature(
-            _id: Uuid,
             _definition: &DerivedFeatureDef,
         ) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)

@@ -32,9 +32,9 @@ pub struct EntityProperty {
 }
 
 impl EntityPropMutator for EntityProperty {
-    fn new_project(id: Uuid, definition: &ProjectDef) -> Result<Self, RegistryError> {
+    fn new_project(definition: &ProjectDef) -> Result<Self, RegistryError> {
         Ok(EntityProperty {
-            guid: id,
+            guid: definition.id,
             last_modified_ts: chrono::Utc::now().timestamp().to_string(),
             status: EntityStatus::Active,
             display_text: definition.qualified_name.to_owned(),
@@ -54,9 +54,9 @@ impl EntityPropMutator for EntityProperty {
             }),
         })
     }
-    fn new_source(id: Uuid, definition: &SourceDef) -> Result<Self, RegistryError> {
+    fn new_source(definition: &SourceDef) -> Result<Self, RegistryError> {
         Ok(EntityProperty {
-            guid: id,
+            guid: definition.id,
             last_modified_ts: chrono::Utc::now().timestamp().to_string(),
             status: EntityStatus::Active,
             display_text: definition.name.to_owned(),
@@ -77,9 +77,9 @@ impl EntityPropMutator for EntityProperty {
             }),
         })
     }
-    fn new_anchor(id: Uuid, definition: &AnchorDef) -> Result<Self, RegistryError> {
+    fn new_anchor(definition: &AnchorDef) -> Result<Self, RegistryError> {
         Ok(EntityProperty {
-            guid: id,
+            guid: definition.id,
             last_modified_ts: chrono::Utc::now().timestamp().to_string(),
             status: EntityStatus::Active,
             display_text: definition.name.to_owned(),
@@ -97,9 +97,9 @@ impl EntityPropMutator for EntityProperty {
             }),
         })
     }
-    fn new_anchor_feature(id: Uuid, definition: &AnchorFeatureDef) -> Result<Self, RegistryError> {
+    fn new_anchor_feature(definition: &AnchorFeatureDef) -> Result<Self, RegistryError> {
         Ok(EntityProperty {
-            guid: id,
+            guid: definition.id,
             last_modified_ts: chrono::Utc::now().timestamp().to_string(),
             status: EntityStatus::Active,
             display_text: definition.name.to_owned(),
@@ -118,9 +118,9 @@ impl EntityPropMutator for EntityProperty {
             }),
         })
     }
-    fn new_derived_feature(id: Uuid, definition: &DerivedFeatureDef) -> Result<Self, RegistryError> {
+    fn new_derived_feature(definition: &DerivedFeatureDef) -> Result<Self, RegistryError> {
         Ok(EntityProperty {
-            guid: id,
+            guid: definition.id,
             last_modified_ts: chrono::Utc::now().timestamp().to_string(),
             status: EntityStatus::Active,
             display_text: definition.name.to_owned(),

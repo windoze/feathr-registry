@@ -1,7 +1,14 @@
-use std::{fs::{read_dir, remove_dir_all}, path::PathBuf, process::exit};
+use std::{
+    fs::{read_dir, remove_dir_all},
+    path::PathBuf,
+    pin::Pin,
+    process::exit,
+    vec,
+};
 
 use clap::Parser;
 use common_utils::Logged;
+use futures::{future::join_all, Future};
 use log::{debug, info, warn};
 use poem::{
     listener::TcpListener,
@@ -40,6 +47,14 @@ pub struct Opt {
     /// True to join the cluster as voter, otherwise learner
     #[clap(long)]
     pub voter: bool,
+
+    /// True to load data from the database
+    #[clap(long)]
+    pub load_db: bool,
+
+    /// True to write updates to the database
+    #[clap(long)]
+    pub write_db: bool,
 
     #[clap(
         long,
@@ -125,12 +140,6 @@ async fn main() -> Result<(), anyhow::Error> {
             });
         let app = RaftRegistryApp::new(1, options.http_addr.clone(), raft_config).await;
         app.init().await?;
-        match app.load_data().await {
-            Ok(_) => {
-                attach_storage(&mut app.store.state_machine.write().await.registry);
-            },
-            Err(e) => warn!("Failed to load data, error {:?}", e),
-        };
         app
     } else {
         RaftRegistryApp::new(
@@ -178,6 +187,7 @@ async fn main() -> Result<(), anyhow::Error> {
             spa_endpoint::SpaEndpoint::new("./static-files", "index.html"),
         )
         .data(app.clone());
+    let mut tasks: Vec<Pin<Box<dyn Future<Output = ()>>>> = vec![];
     let svc_task = async {
         Server::new(TcpListener::bind(http_addr))
             .run(route)
@@ -185,14 +195,31 @@ async fn main() -> Result<(), anyhow::Error> {
             .log()
             .ok();
     };
+    tasks.push(Box::pin(svc_task));
     if !options.seeds.is_empty() {
         let joining_task = async {
             debug!("Joining cluster");
             app.join_cluster(&options.seeds, options.voter).await.ok();
         };
-        futures::join!(svc_task, joining_task);
-    } else {
-        svc_task.await;
+        tasks.push(Box::pin(joining_task));
     }
+    if options.load_db {
+        let loading_task = async {
+            match app.load_data().await {
+                Ok(_) => {
+                    if options.write_db {
+                        // This is a load-write node
+                        attach_storage(&mut app.store.state_machine.write().await.registry);
+                    }
+                }
+                Err(e) => warn!("Failed to load data, error {:?}", e),
+            };
+        };
+        tasks.push(Box::pin(loading_task));
+    } else if options.write_db {
+        // This is a write-only node
+        attach_storage(&mut app.store.state_machine.write().await.registry);
+    }
+    join_all(tasks.into_iter()).await;
     Ok(())
 }

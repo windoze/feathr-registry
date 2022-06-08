@@ -93,7 +93,7 @@ where
     /**
      * Create new project
      */
-    async fn new_project(&mut self, id: Uuid, definition: &ProjectDef) -> Result<Uuid, RegistryError>;
+    async fn new_project(&mut self, definition: &ProjectDef) -> Result<Uuid, RegistryError>;
 
     /**
      * Create new source under specified project
@@ -101,7 +101,6 @@ where
     async fn new_source(
         &mut self,
         project_id: Uuid,
-        id: Uuid,
         definition: &SourceDef,
     ) -> Result<Uuid, RegistryError>;
 
@@ -111,7 +110,6 @@ where
     async fn new_anchor(
         &mut self,
         project_id: Uuid,
-        id: Uuid,
         definition: &AnchorDef,
     ) -> Result<Uuid, RegistryError>;
 
@@ -122,7 +120,6 @@ where
         &mut self,
         project_id: Uuid,
         anchor_id: Uuid,
-        id: Uuid,
         definition: &AnchorFeatureDef,
     ) -> Result<Uuid, RegistryError>;
 
@@ -132,7 +129,6 @@ where
     async fn new_derived_feature(
         &mut self,
         project_id: Uuid,
-        id: Uuid,
         definition: &DerivedFeatureDef,
     ) -> Result<Uuid, RegistryError>;
 

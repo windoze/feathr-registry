@@ -172,13 +172,12 @@ where
     // Create new project
     async fn new_project(
         &mut self,
-        id: Uuid,
         definition: &ProjectDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_project(id, &definition)?;
+        let prop = EntityProp::new_project(&definition)?;
         self.insert_entity(
-            id,
+            definition.id,
             EntityType::Project,
             &definition.qualified_name,
             &definition.qualified_name,
@@ -190,15 +189,14 @@ where
     // Create new source under specified project
     async fn new_source(
         &mut self,
-        id: Uuid,
         project_id: Uuid,
         definition: &SourceDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_source(id, &definition)?;
+        let prop = EntityProp::new_source(&definition)?;
         let source_id = self
             .insert_entity(
-                id,
+                definition.id,
                 EntityType::Source,
                 &definition.name,
                 &definition.qualified_name,
@@ -219,15 +217,14 @@ where
     // Create new anchor under specified project
     async fn new_anchor(
         &mut self,
-        id: Uuid,
         project_id: Uuid,
         definition: &AnchorDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_anchor(id, &definition)?;
+        let prop = EntityProp::new_anchor(&definition)?;
         let anchor_id = self
             .insert_entity(
-                id,
+                definition.id,
                 EntityType::Anchor,
                 &definition.name,
                 &definition.qualified_name,
@@ -255,16 +252,15 @@ where
     // Create new anchor feature under specified anchor
     async fn new_anchor_feature(
         &mut self,
-        id: Uuid,
         project_id: Uuid,
         anchor_id: Uuid,
         definition: &AnchorFeatureDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_anchor_feature(id, &definition)?;
+        let prop = EntityProp::new_anchor_feature(&definition)?;
         let feature_id = self
             .insert_entity(
-                id,
+                definition.id,
                 EntityType::AnchorFeature,
                 &definition.name,
                 &definition.qualified_name,
@@ -303,15 +299,14 @@ where
     // Create new derived feature under specified project
     async fn new_derived_feature(
         &mut self,
-        id: Uuid,
         project_id: Uuid,
         definition: &DerivedFeatureDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_derived_feature(id, &definition)?;
+        let prop = EntityProp::new_derived_feature(&definition)?;
         let feature_id = self
             .insert_entity(
-                id,
+                definition.id,
                 EntityType::DerivedFeature,
                 &definition.name,
                 &definition.qualified_name,

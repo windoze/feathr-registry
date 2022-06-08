@@ -407,8 +407,7 @@ where
                 }
                 FeathrApiRequest::CreateProject { mut definition } => {
                     definition.qualified_name = definition.name.clone();
-                    let guid = Uuid::new_v4();
-                    this.new_project(guid, &definition.try_into()?).await.into()
+                    this.new_project(&definition.try_into()?).await.into()
                 }
                 FeathrApiRequest::GetProjectDataSources {
                     project_id_or_name,
@@ -442,8 +441,7 @@ where
                     let project_id = get_id(this, project_id_or_name).await?;
                     let project_name = get_name(this, project_id).await?;
                     definition.qualified_name = format!("{}__{}", project_name, definition.name);
-                    let guid = Uuid::new_v4();
-                    this.new_source(project_id, guid, &definition.try_into()?)
+                    this.new_source(project_id, &definition.try_into()?)
                         .await
                         .into()
                 }
@@ -479,8 +477,7 @@ where
                     let project_id = get_id(this, project_id_or_name).await?;
                     let project_name = get_name(this, project_id).await?;
                     definition.qualified_name = format!("{}__{}", project_name, definition.name);
-                    let guid = Uuid::new_v4();
-                    this.new_anchor(project_id, guid, &definition.try_into()?)
+                    this.new_anchor(project_id, &definition.try_into()?)
                         .await
                         .into()
                 }
@@ -517,8 +514,7 @@ where
                     let project_id = get_id(this, project_id_or_name).await?;
                     let project_name = get_name(this, project_id).await?;
                     definition.qualified_name = format!("{}__{}", project_name, definition.name);
-                    let guid = Uuid::new_v4();
-                    this.new_derived_feature(project_id, guid, &definition.try_into()?)
+                    this.new_derived_feature(project_id, &definition.try_into()?)
                         .await
                         .into()
                 }
@@ -560,8 +556,7 @@ where
                 } => {
                     let (project_id, anchor_id) =
                         get_child_id(this, project_id_or_name, anchor_id_or_name).await?;
-                    let id = Uuid::new_v4();
-                    this.new_anchor_feature(project_id, anchor_id, id, &definition.try_into()?)
+                    this.new_anchor_feature(project_id, anchor_id, &definition.try_into()?)
                         .await
                         .into()
                 }

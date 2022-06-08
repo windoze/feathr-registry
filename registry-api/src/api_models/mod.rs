@@ -22,6 +22,8 @@ fn parse_uuid(s: &str) -> Result<Uuid, ApiError> {
 #[serde(rename_all = "camelCase")]
 #[oai(rename_all = "camelCase")]
 pub struct ProjectDef {
+    #[oai(skip)]
+    pub id: String,
     pub name: String,
     #[oai(skip)]
     pub qualified_name: String,
@@ -34,6 +36,7 @@ impl TryInto<registry_provider::ProjectDef> for ProjectDef {
 
     fn try_into(self) -> Result<registry_provider::ProjectDef, Self::Error> {
         Ok(registry_provider::ProjectDef {
+            id: Uuid::parse_str(&self.id).map_err(|e| ApiError::BadRequest(e.to_string()))?,
             qualified_name: self.qualified_name,
             tags: self.tags,
         })
@@ -43,6 +46,8 @@ impl TryInto<registry_provider::ProjectDef> for ProjectDef {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceDef {
+    #[oai(skip)]
+    pub id: String,
     pub name: String,
     #[oai(skip)]
     pub qualified_name: String,
@@ -64,6 +69,7 @@ impl TryInto<registry_provider::SourceDef> for SourceDef {
 
     fn try_into(self) -> Result<registry_provider::SourceDef, Self::Error> {
         Ok(registry_provider::SourceDef {
+            id: Uuid::parse_str(&self.id).map_err(|e| ApiError::BadRequest(e.to_string()))?,
             qualified_name: self.qualified_name,
             name: self.name,
             source_type: self.source_type,
@@ -79,6 +85,8 @@ impl TryInto<registry_provider::SourceDef> for SourceDef {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[serde(rename_all = "camelCase")]
 pub struct AnchorDef {
+    #[oai(skip)]
+    pub id: String,
     pub name: String,
     #[oai(skip)]
     pub qualified_name: String,
@@ -92,6 +100,7 @@ impl TryInto<registry_provider::AnchorDef> for AnchorDef {
 
     fn try_into(self) -> Result<registry_provider::AnchorDef, Self::Error> {
         Ok(registry_provider::AnchorDef {
+            id: Uuid::parse_str(&self.id).map_err(|e| ApiError::BadRequest(e.to_string()))?,
             name: self.name,
             qualified_name: self.qualified_name,
             source_id: parse_uuid(&self.source_id)?,
@@ -315,6 +324,8 @@ impl From<registry_provider::FeatureTransformation> for FeatureTransformation {
 #[serde(rename_all = "camelCase")]
 #[oai(rename_all = "camelCase")]
 pub struct AnchorFeatureDef {
+    #[oai(skip)]
+    pub id: String,
     pub name: String,
     #[oai(skip)]
     pub qualified_name: String,
@@ -330,6 +341,7 @@ impl TryInto<registry_provider::AnchorFeatureDef> for AnchorFeatureDef {
 
     fn try_into(self) -> Result<registry_provider::AnchorFeatureDef, Self::Error> {
         Ok(registry_provider::AnchorFeatureDef {
+            id: Uuid::parse_str(&self.id).map_err(|e| ApiError::BadRequest(e.to_string()))?,
             name: self.name,
             qualified_name: self.qualified_name,
             feature_type: self.feature_type.try_into()?,
@@ -348,6 +360,8 @@ impl TryInto<registry_provider::AnchorFeatureDef> for AnchorFeatureDef {
 #[serde(rename_all = "camelCase")]
 #[oai(rename_all = "camelCase")]
 pub struct DerivedFeatureDef {
+    #[oai(skip)]
+    pub id: String,
     pub name: String,
     #[oai(skip)]
     pub qualified_name: String,
@@ -367,6 +381,7 @@ impl TryInto<registry_provider::DerivedFeatureDef> for DerivedFeatureDef {
 
     fn try_into(self) -> Result<registry_provider::DerivedFeatureDef, Self::Error> {
         Ok(registry_provider::DerivedFeatureDef {
+            id: Uuid::parse_str(&self.id).map_err(|e| ApiError::BadRequest(e.to_string()))?,
             name: self.name,
             qualified_name: self.qualified_name,
             feature_type: self.feature_type.try_into()?,

@@ -231,6 +231,9 @@ impl RaftRegistryApp {
                                         return Ok(())
                                     }
                                 }
+                            } else {
+                                // Join as learner
+                                return Ok(())
                             }
                         }
                     }
