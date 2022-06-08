@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_utils::Appliable;
-use log::debug;
+use log::trace;
 use openraft::error::AppendEntriesError;
 use openraft::error::InstallSnapshotError;
 use openraft::error::NetworkError;
@@ -28,11 +28,11 @@ use crate::RegistryTypeConfig;
 
 pub struct RegistryNetwork {
     pub clients: Arc<HashMap<String, reqwest::Client>>,
-    config: Arc<crate::Config>,
+    config: Arc<crate::NodeConfig>,
 }
 
 impl RegistryNetwork {
-    pub fn new(config: crate::Config) -> Self {
+    pub fn new(config: crate::NodeConfig) -> Self {
         Self {
             clients: Arc::new(HashMap::new()),
             config: Arc::new(config),
@@ -59,7 +59,7 @@ impl RegistryNetwork {
 
         let client = clients.entry(url.clone()).or_insert(reqwest::Client::new());
 
-        debug!("send_rpc: url is `{}`", url);
+        trace!("send_rpc: url is `{}`", url);
         let resp = client
             .post(url)
             .apply(|r| {

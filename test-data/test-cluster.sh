@@ -56,15 +56,15 @@ sleep 1
 
 echo "Start 3 uninitialized registry-app servers..."
 
-nohup ./target/debug/registry-app  --id 1 --http-addr 127.0.0.1:21001 > test-n1.log &
+nohup ./target/debug/feathr-registry  --node-id 1 --http-addr 127.0.0.1:21001 > test-n1.log &
 sleep 1
 echo "Server 1 started"
 
-nohup ./target/debug/registry-app  --id 2 --http-addr 127.0.0.1:21002 > test-n2.log &
+nohup ./target/debug/feathr-registry  --node-id 2 --http-addr 127.0.0.1:21002 > test-n2.log &
 sleep 1
 echo "Server 2 started"
 
-nohup ./target/debug/registry-app  --id 3 --http-addr 127.0.0.1:21003 > test-n3.log &
+nohup ./target/debug/feathr-registry  --node-id 3 --http-addr 127.0.0.1:21003 > test-n3.log &
 sleep 1
 echo "Server 3 started"
 sleep 1

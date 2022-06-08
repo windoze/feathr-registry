@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use log::debug;
+use log::trace;
 
 /// `set!` macro works like `vec!`, but generates a HashSet.
 #[macro_export]
@@ -25,7 +25,7 @@ where
 {
     fn log(self) -> Self {
         if let Err(e) = &self {
-            debug!("---TraceError--- {:#?}", e)
+            trace!("---TraceError--- {:#?}", e)
         }
         self
     }
@@ -113,7 +113,7 @@ pub fn init_logger() {
             "registry_app",
         ];
         let module_logs = modules.into_iter().map(|m| format!("{}=debug", m)).collect::<Vec<_>>().join(",");
-        let rust_log = format!("info,tantivy=warn,tiberius=warn,{}", module_logs);
+        let rust_log = format!("info,tantivy=warn,tiberius=warn,openraft=warn,{}", module_logs);
         if std::env::var_os("RUST_LOG").is_none() {
             std::env::set_var("RUST_LOG", &rust_log);
         }

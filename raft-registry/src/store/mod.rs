@@ -24,7 +24,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{RegistryNodeId, RegistryTypeConfig};
 
-pub use config::Config;
+pub use config::NodeConfig;
 
 #[derive(Debug)]
 pub struct RegistrySnapshot {
@@ -60,12 +60,12 @@ pub struct RegistryStore {
 
     current_snapshot: RwLock<Option<RegistrySnapshot>>,
 
-    config: Config,
+    config: NodeConfig,
 
     pub node_id: RegistryNodeId,
 }
 
-fn get_sled_db(config: Config, node_id: RegistryNodeId) -> Db {
+fn get_sled_db(config: NodeConfig, node_id: RegistryNodeId) -> Db {
     let db_path = format!(
         "{}/{}-{}.binlog",
         config.journal_path, config.instance_prefix, node_id
@@ -76,7 +76,7 @@ fn get_sled_db(config: Config, node_id: RegistryNodeId) -> Db {
 }
 
 impl RegistryStore {
-    pub fn open_create(node_id: RegistryNodeId, config: Config) -> RegistryStore {
+    pub fn open_create(node_id: RegistryNodeId, config: NodeConfig) -> RegistryStore {
         tracing::info!("open_create, node_id: {}", node_id);
 
         let db = get_sled_db(config.clone(), node_id);
@@ -174,7 +174,7 @@ impl RaftLogReader<RegistryTypeConfig> for Arc<RegistryStore> {
             None => last_purged,
             Some(x) => Some(x),
         };
-        tracing::debug!(
+        tracing::trace!(
             "get_log_state: last_purged = {:?}, last = {:?}",
             last_purged,
             last

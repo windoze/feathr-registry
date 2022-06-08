@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_utils::Appliable;
+use common_utils::Logged;
 use log::debug;
 use openraft::error::AddLearnerError;
 use openraft::error::CheckIsLeaderError;
@@ -208,7 +209,7 @@ impl RegistryClient {
 
         loop {
             let res: Result<Resp, RPCError<RegistryNodeId, Err>> =
-                self.do_send_rpc_to_leader(uri, req).await;
+                self.do_send_rpc_to_leader(uri, req).await.log();
 
             let rpc_err = match res {
                 Ok(x) => return Ok(x),
@@ -234,6 +235,7 @@ impl RegistryClient {
 
                     n_retry -= 1;
                     if n_retry > 0 {
+                        debug!("Retrying, {} times left", n_retry);
                         continue;
                     }
                 }

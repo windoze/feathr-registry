@@ -777,6 +777,7 @@ dependencies = [
  "async-trait",
  "clap",
  "common-utils",
+ "futures",
  "log",
  "openraft",
  "percent-encoding",
@@ -2036,6 +2037,7 @@ dependencies = [
 name = "raft-registry"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "common-utils",
  "env_logger",

@@ -2,7 +2,7 @@ use std::process::exit;
 
 use clap::Parser;
 use common_utils::Logged;
-use log::info;
+use log::{info, debug};
 use poem::{
     listener::TcpListener,
     middleware::{Cors, Tracing},
@@ -30,7 +30,15 @@ pub struct Opt {
 
     /// Init the Raft protocol so this node can be the leader of the cluster or running standalone
     #[clap(long)]
-    pub standalone: bool,
+    pub init: bool,
+
+    /// Join the cluster via seed nodes
+    #[clap(long)]
+    pub seeds: Vec<String>,
+
+    /// True to join the cluster as voter, otherwise learner
+    #[clap(long)]
+    pub voter: bool,
 
     #[clap(long, hide = true, env = "RAFT_SNAPSHOT_PATH", default_value = "/tmp/snapshot")]
     pub snapshot_path: String,
@@ -41,7 +49,7 @@ pub struct Opt {
     #[clap(long, hide = true, env = "RAFT_JOURNAL_PATH", default_value = "/tmp/journal")]
     pub journal_path: String,
 
-    #[clap(long, hide = true, env = "RAFT_SNAPSHOT_PER_EVENTS", default_value = "500")]
+    #[clap(long, hide = true, env = "RAFT_SNAPSHOT_PER_EVENTS", default_value = "5")]
     pub snapshot_per_events: u32,
 
     #[clap(long, hide = true, env = "RAFT_MANAGEMENT_CODE")]
@@ -55,7 +63,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // Parse the parameters passed by arguments.
     let options = Opt::parse();
 
-    let raft_config = raft_registry::Config {
+    let raft_config = raft_registry::NodeConfig {
         snapshot_path: options.snapshot_path,
         instance_prefix: options.instance_prefix,
         journal_path: options.journal_path,
@@ -63,8 +71,12 @@ async fn main() -> Result<(), anyhow::Error> {
         management_code: options.management_code,
     };
 
-    let app = if options.standalone {
-        info!("Starting in standalone mode");
+    let app = if options.init {
+        if !options.seeds.is_empty() {
+            println!("ERROR: `seeds` must be not set when running as cluster leader");
+            exit(1);
+        }
+        info!("Starting as cluster leader");
         let app = RaftRegistryApp::new(1, options.http_addr.clone(), raft_config).await;
         app.init().await?;
         app
@@ -87,7 +99,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let http_addr = options
         .http_addr
         .trim_start_matches("http://")
-        .trim_start_matches("https://");
+        .trim_start_matches("https://")
+        .to_string();
 
     let api_service = OpenApiService::new(
         FeathrApi,
@@ -112,10 +125,22 @@ async fn main() -> Result<(), anyhow::Error> {
             "/",
             spa_endpoint::SpaEndpoint::new("./static-files", "index.html"),
         )
-        .data(app);
-    Server::new(TcpListener::bind(http_addr))
+        .data(app.clone());
+    let svc_task = async {
+        Server::new(TcpListener::bind(http_addr))
         .run(route)
         .await
-        .log()?;
+        .log()
+        .ok();
+    };
+    if !options.seeds.is_empty() {
+        let joining_task = async {
+            debug!("Joining cluster");
+            app.join_cluster(&options.seeds, options.voter).await.ok();
+        };
+        futures::join!(svc_task, joining_task);
+    } else {
+        svc_task.await;
+    }
     Ok(())
 }
