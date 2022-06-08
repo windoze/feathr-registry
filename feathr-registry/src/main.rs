@@ -1,8 +1,8 @@
-use std::process::exit;
+use std::{fs::{read_dir, remove_dir_all}, path::PathBuf, process::exit};
 
 use clap::Parser;
 use common_utils::Logged;
-use log::{info, debug};
+use log::{debug, info};
 use poem::{
     listener::TcpListener,
     middleware::{Cors, Tracing},
@@ -40,16 +40,36 @@ pub struct Opt {
     #[clap(long)]
     pub voter: bool,
 
-    #[clap(long, hide = true, env = "RAFT_SNAPSHOT_PATH", default_value = "/tmp/snapshot")]
+    #[clap(
+        long,
+        hide = true,
+        env = "RAFT_SNAPSHOT_PATH",
+        default_value = "/tmp/snapshot"
+    )]
     pub snapshot_path: String,
-    
-    #[clap(long, hide = true, env = "RAFT_INSTANCE_PREFIX", default_value = "feathr-registry")]
+
+    #[clap(
+        long,
+        hide = true,
+        env = "RAFT_INSTANCE_PREFIX",
+        default_value = "feathr-registry"
+    )]
     pub instance_prefix: String,
 
-    #[clap(long, hide = true, env = "RAFT_JOURNAL_PATH", default_value = "/tmp/journal")]
+    #[clap(
+        long,
+        hide = true,
+        env = "RAFT_JOURNAL_PATH",
+        default_value = "/tmp/journal"
+    )]
     pub journal_path: String,
 
-    #[clap(long, hide = true, env = "RAFT_SNAPSHOT_PER_EVENTS", default_value = "100")]
+    #[clap(
+        long,
+        hide = true,
+        env = "RAFT_SNAPSHOT_PER_EVENTS",
+        default_value = "100"
+    )]
     pub snapshot_per_events: u64,
 
     #[clap(long, hide = true, env = "RAFT_MANAGEMENT_CODE")]
@@ -64,9 +84,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let options = Opt::parse();
 
     let raft_config = raft_registry::NodeConfig {
-        snapshot_path: options.snapshot_path,
-        instance_prefix: options.instance_prefix,
-        journal_path: options.journal_path,
+        snapshot_path: options.snapshot_path.clone(),
+        instance_prefix: options.instance_prefix.clone(),
+        journal_path: options.journal_path.clone(),
         snapshot_per_events: options.snapshot_per_events,
         management_code: options.management_code,
     };
@@ -77,6 +97,31 @@ async fn main() -> Result<(), anyhow::Error> {
             exit(1);
         }
         info!("Starting as cluster leader");
+        // Cleanup old logs and snapshots before initializing the new cluster
+        let log_path = PathBuf::from(options.journal_path)
+            .join(format!("{}-1.binlog", options.instance_prefix));
+        println!("Removing journal dir `{}`", log_path.to_string_lossy());
+        remove_dir_all(&log_path)?;
+        read_dir(options.snapshot_path)?
+            .filter(|r| {
+                if let Ok(f) = r {
+                    f.file_type()
+                        .ok()
+                        .map(|ft| ft.is_file())
+                        .unwrap_or_default()
+                        && f.file_name()
+                            .to_str()
+                            .map(|f| f.starts_with(&format!("{}+1+", options.instance_prefix)))
+                            .unwrap_or_default()
+                } else {
+                    false
+                }
+            })
+            .filter_map(|f| f.ok())
+            .for_each(|e| {
+                println!("Removing snapshot `{}`", e.path().to_string_lossy());
+                std::fs::remove_file(e.path()).ok();
+            });
         let app = RaftRegistryApp::new(1, options.http_addr.clone(), raft_config).await;
         app.init().await?;
         app
@@ -87,7 +132,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 None => {
                     println!("ERROR: Node ID must be specified.");
                     exit(1);
-                },
+                }
             },
             options.http_addr.clone(),
             raft_config,
@@ -128,10 +173,10 @@ async fn main() -> Result<(), anyhow::Error> {
         .data(app.clone());
     let svc_task = async {
         Server::new(TcpListener::bind(http_addr))
-        .run(route)
-        .await
-        .log()
-        .ok();
+            .run(route)
+            .await
+            .log()
+            .ok();
     };
     if !options.seeds.is_empty() {
         let joining_task = async {

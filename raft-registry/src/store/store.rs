@@ -88,7 +88,7 @@ impl RegistryStore {
             let ext = s1.next();
             match ext.unwrap() {
                 "bin" => {
-                    tracing::debug!("file: {:?}", file);
+                    tracing::trace!("file: {:?}", file);
                     let mut s3 = file.unwrap().split("+");
                     let prefix = s3.next();
 
@@ -102,6 +102,7 @@ impl RegistryStore {
                     }
                     let node_id = s3.next().unwrap();
                     if node_id != self.node_id.to_string() {
+                        tracing::trace!("Skipping unknown snapshot file '{}'", f_name);
                         continue;
                     };
                     let snapshot_id = s3.next().unwrap();
