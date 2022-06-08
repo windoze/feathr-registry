@@ -191,6 +191,32 @@ where
         }
     }
 
+    pub(crate) async fn batch_load<NI, EI>(&mut self, entities: NI, edges: EI) -> Result<(), RegistryError>
+    where
+        NI: Iterator<Item = Entity<EntityProp>>,
+        EI: Iterator<Item = Edge<EdgeProp>>,
+    {
+        for e in entities {
+            self.insert_entity(
+                e.id,
+                e.entity_type,
+                e.name.clone(),
+                e.qualified_name.clone(),
+                e.properties.clone(),
+            )
+            .await?;
+            self.fts_index.add_doc(&e)?;
+        }
+
+        self.fts_index.commit()?;
+
+        edges.for_each(|e| {
+            self.connect(e.from, e.to, e.edge_type, e.properties).ok();
+        });
+
+        Ok(())
+    }
+
     pub(crate) async fn load<NI, EI>(entities: NI, edges: EI) -> Result<Self, RegistryError>
     where
         NI: Iterator<Item = Entity<EntityProp>>,
@@ -205,24 +231,7 @@ where
             fts_index: FtsIndex::new(),
             external_storage: Default::default(),
         };
-
-        for e in entities {
-            ret.insert_entity(
-                e.id,
-                e.entity_type,
-                e.name.clone(),
-                e.qualified_name.clone(),
-                e.properties.clone(),
-            )
-            .await?;
-            ret.fts_index.add_doc(&e)?;
-        }
-
-        ret.fts_index.commit()?;
-
-        edges.for_each(|e| {
-            ret.connect(e.from, e.to, e.edge_type, e.properties).ok();
-        });
+        ret.batch_load(entities, edges).await?;
 
         Ok(ret)
     }

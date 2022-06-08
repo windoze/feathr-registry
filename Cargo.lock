@@ -2041,6 +2041,7 @@ dependencies = [
  "async-trait",
  "common-utils",
  "env_logger",
+ "futures-util",
  "log",
  "openraft",
  "poem",

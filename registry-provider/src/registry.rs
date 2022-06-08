@@ -13,6 +13,11 @@ where
     EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     /**
+     * Batch load entities and edges
+     */
+    async fn load_data(&mut self, entities: Vec<Entity<EntityProp>>, edges: Vec<Edge<EdgeProp>>) -> Result<(), RegistryError>;
+
+    /**
      * Get ids of all entry points
      */
     async fn get_entry_points(&self) -> Result<Vec<Entity<EntityProp>>, RegistryError>;

@@ -2,7 +2,7 @@ use std::{fs::{read_dir, remove_dir_all}, path::PathBuf, process::exit};
 
 use clap::Parser;
 use common_utils::Logged;
-use log::{debug, info};
+use log::{debug, info, warn};
 use poem::{
     listener::TcpListener,
     middleware::{Cors, Tracing},
@@ -10,6 +10,7 @@ use poem::{
 };
 use poem_openapi::OpenApiService;
 use raft_registry::{management_routes, raft_routes, FeathrApi, RaftRegistryApp, RaftSequencer};
+use sql_provider::attach_storage;
 
 mod spa_endpoint;
 
@@ -124,6 +125,12 @@ async fn main() -> Result<(), anyhow::Error> {
             });
         let app = RaftRegistryApp::new(1, options.http_addr.clone(), raft_config).await;
         app.init().await?;
+        match app.load_data().await {
+            Ok(_) => {
+                attach_storage(&mut app.store.state_machine.write().await.registry);
+            },
+            Err(e) => warn!("Failed to load data, error {:?}", e),
+        };
         app
     } else {
         RaftRegistryApp::new(

@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-pub use database::load_registry;
+pub use database::{load_registry, attach_storage, load_content};
 pub use db_registry::Registry;
 use registry_provider::{
     AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgePropMutator, EdgeType, Entity,
@@ -25,6 +25,21 @@ where
     EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
     EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
+    /**
+     * Replace existing content with input snapshot
+     */
+    async fn load_data(
+        &mut self,
+        entities: Vec<Entity<EntityProp>>,
+        edges: Vec<Edge<EdgeProp>>,
+    ) -> Result<(), RegistryError> {
+        self.batch_load(
+            entities.into_iter().map(|e| e.into()),
+            edges.into_iter().map(|e| e.into()),
+        )
+        .await
+    }
+
     /**
      * Get ids of all entry points
      */
@@ -231,11 +246,7 @@ where
             anchor_id,
             definition.source_id,
             EdgeType::Consumes,
-            EdgeProp::new(
-                anchor_id,
-                definition.source_id,
-                EdgeType::Consumes,
-            ),
+            EdgeProp::new(anchor_id, definition.source_id, EdgeType::Consumes),
         )?;
 
         Ok(anchor_id)

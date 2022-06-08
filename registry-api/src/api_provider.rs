@@ -99,6 +99,10 @@ pub enum FeathrApiRequest {
     GetFeatureLineage {
         id_or_name: String,
     },
+    BatchLoad {
+        entities: Vec<registry_provider::Entity<EntityProperty>>,
+        edges: Vec<Edge<EdgeProperty>>,
+    },
 }
 
 impl FeathrApiRequest {
@@ -110,6 +114,7 @@ impl FeathrApiRequest {
                 | Self::CreateProjectAnchor { .. }
                 | Self::CreateAnchorFeature { .. }
                 | Self::CreateProjectDerivedFeature { .. }
+                | Self::BatchLoad { .. }
         )
     }
 }
@@ -586,6 +591,9 @@ where
                             .collect::<Vec<_>>(),
                     ))
                     .into()
+                }
+                FeathrApiRequest::BatchLoad { entities, edges } => {
+                    this.load_data(entities, edges).await.into()
                 }
             })
         }

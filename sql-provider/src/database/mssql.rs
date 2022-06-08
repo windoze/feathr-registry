@@ -9,7 +9,7 @@ use tiberius::{FromSql, Row};
 use tokio::sync::{OnceCell, RwLock};
 use uuid::Uuid;
 
-use registry_provider::{EdgeProperty, EdgeType, Entity, EntityProperty, RegistryError};
+use registry_provider::{Edge, EdgeProperty, EdgeType, Entity, EntityProperty, RegistryError};
 
 use crate::{db_registry::ExternalStorage, Registry};
 
@@ -91,25 +91,20 @@ static POOL: OnceCell<Option<Arc<RwLock<Pool<ConnectionManager>>>>> = OnceCell::
 
 async fn init_pool() -> anyhow::Result<Arc<RwLock<Pool<ConnectionManager>>>> {
     debug!("Initializing MSSQL connection pool");
-    let conn_str =
-        std::env::var("CONNECTION_STR")?;
+    let conn_str = std::env::var("CONNECTION_STR")?;
     let mgr = bb8_tiberius::ConnectionManager::build(conn_str.as_str())?;
-    let pool = bb8::Pool::builder()
-        .max_size(5)
-        .build(mgr)
-        .await?;
+    let pool = bb8::Pool::builder().max_size(5).build(mgr).await?;
     debug!("MSSQL connection pool initialized");
     Ok(Arc::new(RwLock::new(pool)))
 }
 
 async fn connect() -> Result<PooledConnection<'static, ConnectionManager>, anyhow::Error> {
     debug!("Acquiring MSSQL connection pool");
-    let pool = POOL.get_or_init(|| async {
-        init_pool().await.ok()
-    }).await.clone()
-    .ok_or_else(|| {
-        anyhow::Error::msg("Environment variable 'CONNECTION_STR' is not set.")
-    })?;
+    let pool = POOL
+        .get_or_init(|| async { init_pool().await.ok() })
+        .await
+        .clone()
+        .ok_or_else(|| anyhow::Error::msg("Environment variable 'CONNECTION_STR' is not set."))?;
     debug!("MSSQL connection pool acquired, connecting to database");
     let conn = pool.read().await.get_owned().await?;
     debug!("Database connected");
@@ -141,6 +136,29 @@ pub async fn load_registry() -> Result<Registry<EntityProperty, EdgeProperty>, a
         .push(Arc::new(RwLock::new(MsSqlStorage::default())));
 
     Ok(registry)
+}
+
+pub async fn load_content(
+) -> Result<(Vec<Entity<EntityProperty>>, Vec<Edge<EdgeProperty>>), anyhow::Error> {
+    debug!("Loading registry data from database");
+    let mut conn = connect().await?;
+    let edges = load_edges(&mut conn).await?;
+    let entities = load_entities(&mut conn).await?;
+    debug!(
+        "{} entities and {} edges loaded",
+        entities.len(),
+        edges.len()
+    );
+    Ok((
+        entities.into_iter().map(|e| e.into()).collect(),
+        edges.into_iter().map(|e| e.into()).collect(),
+    ))
+}
+
+pub fn attach_storage(registry: &mut Registry<EntityProperty, EdgeProperty>) {
+    registry
+        .external_storage
+        .push(Arc::new(RwLock::new(MsSqlStorage::default())));
 }
 
 #[derive(Debug)]
@@ -296,7 +314,7 @@ impl ExternalStorage<EntityProperty> for MsSqlStorage {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, collections::HashMap};
+    use std::{collections::HashMap, fs::File};
 
     use registry_provider::*;
     use serde::Deserialize;

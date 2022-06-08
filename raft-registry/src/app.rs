@@ -16,6 +16,7 @@ use registry_api::ApiError;
 use registry_api::FeathrApiProvider;
 use registry_api::FeathrApiRequest;
 use registry_api::FeathrApiResponse;
+use sql_provider::load_content;
 
 use crate::ManagementCode;
 use crate::RegistryClient;
@@ -107,6 +108,14 @@ impl RaftRegistryApp {
         self.raft.initialize(nodes).await
     }
 
+    pub async fn load_data(&self) -> anyhow::Result<()> {
+        let (entities, edges) = load_content().await?;
+        match self.request(None, FeathrApiRequest::BatchLoad { entities, edges }).await {
+            FeathrApiResponse::Error(e) => Err(e)?,
+            _ => Ok(())
+        }
+    }
+    
     pub async fn request(&self, opt_seq: Option<u64>, req: FeathrApiRequest) -> FeathrApiResponse {
         let mut is_leader = true;
         let should_forward = match self.raft.is_leader().await {
