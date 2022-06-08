@@ -1,13 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use log::info;
 use openraft::{
     error::{CheckIsLeaderError, Infallible},
     raft::ClientWriteRequest,
-    EntryPayload, Node, RaftMetrics, RaftSnapshotBuilder,
+    EntryPayload, Node, RaftMetrics,
 };
 use poem::{
-    error::BadRequest,
     get, handler, post,
     web::{Data, Json, TypedHeader},
     IntoResponse, Route,
