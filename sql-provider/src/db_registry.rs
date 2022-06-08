@@ -457,6 +457,9 @@ where
         T1: ToString,
         T2: ToString,
     {
+        if self.name_id_map.contains_key(&qualified_name.to_string()) {
+            return Err(RegistryError::EntityNameExists(qualified_name.to_string()));
+        }
         let id = Uuid::new_v4();
         let idx = self
             .insert_node(
@@ -486,6 +489,12 @@ where
         T1: ToString,
         T2: ToString,
     {
+        if self.node_id_map.contains_key(&uuid) {
+            return Err(RegistryError::EntityIdExists(uuid));
+        }
+        if self.name_id_map.contains_key(&qualified_name.to_string()) {
+            return Err(RegistryError::EntityNameExists(qualified_name.to_string()));
+        }
         let idx = self
             .insert_node(
                 uuid,

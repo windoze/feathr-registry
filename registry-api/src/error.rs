@@ -38,6 +38,8 @@ impl From<RegistryError> for ApiError {
             RegistryError::EntityNotFound(e) => ApiError::NotFoundError(e),
             RegistryError::InvalidEntity(id) => ApiError::NotFoundError(id.to_string()),
             RegistryError::InvalidEdge(_, _) => ApiError::InternalError(format!("{:?}", e)),
+            RegistryError::EntityNameExists(_) => ApiError::BadRequest(format!("{:?}", e)),
+            RegistryError::EntityIdExists(_) => ApiError::BadRequest(format!("{:?}", e)),
             RegistryError::DeleteInUsed(_) => ApiError::BadRequest(format!("{:?}", e)),
             RegistryError::FtsError(_) => ApiError::InternalError(format!("{:?}", e)),
             RegistryError::ExternalStorageError(_) => ApiError::InternalError(format!("{:?}", e)),

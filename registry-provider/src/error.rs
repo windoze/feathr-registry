@@ -14,6 +14,12 @@ pub enum RegistryError {
     #[error("Entity[{0}] not found")]
     EntityNotFound(String),
 
+    #[error("Entity with name {0} already exists")]
+    EntityNameExists(String),
+
+    #[error("Entity[{0}] already exists")]
+    EntityIdExists(Uuid),
+
     #[error("Entity[{0}] doesn't exist")]
     InvalidEntity(Uuid),
 
