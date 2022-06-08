@@ -42,7 +42,7 @@ impl RaftRegistryApp {
         // Create a configuration for the raft instance.
 
         let mut config = Config::default().validate().unwrap();
-        config.snapshot_policy = SnapshotPolicy::LogsSinceLast(500);
+        config.snapshot_policy = SnapshotPolicy::LogsSinceLast(cfg.snapshot_per_events);
         config.max_applied_log_to_keep = 20000;
         config.install_snapshot_timeout = 400;
 
@@ -79,7 +79,7 @@ impl RaftRegistryApp {
     }
 
     pub async fn check_code(&self, code: Option<ManagementCode>) -> poem::Result<()> {
-        debug!("Checking code {:?}", code);
+        trace!("Checking code {:?}", code);
         match self.store.get_management_code() {
             Some(c) => match code.map(|c| c.code().to_string()) {
                 Some(code) => {

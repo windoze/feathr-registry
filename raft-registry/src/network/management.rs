@@ -1,11 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use log::info;
 use openraft::{
     error::{CheckIsLeaderError, Infallible},
     raft::ClientWriteRequest,
-    EntryPayload, Node, RaftMetrics,
+    EntryPayload, Node, RaftMetrics, RaftSnapshotBuilder,
 };
 use poem::{
+    error::BadRequest,
     get, handler, post,
     web::{Data, Json, TypedHeader},
     IntoResponse, Route,
@@ -103,6 +105,29 @@ pub async fn handle_request(
     Ok(Json(res))
 }
 
+#[handler]
+pub async fn take_snapshot(
+    app: Data<&RaftRegistryApp>,
+    code: Option<TypedHeader<ManagementCode>>,
+) -> poem::Result<impl IntoResponse> {
+    app.check_code(code.map(|c| c.0)).await?;
+
+    let ret = app.raft.is_leader().await;
+    match ret {
+        Ok(_) => {
+            app.store
+                .clone()
+                .build_snapshot()
+                .await
+                .map_err(|e| BadRequest(e))?;
+        }
+        Err(_) => {
+            info!("Only leader can take snapshot");
+        }
+    }
+    Ok(())
+}
+
 /**
  * Handle request only if this node is the leader, return error otherwise
  */
@@ -147,6 +172,7 @@ pub fn management_routes(route: Route) -> Route {
         .at("/change-membership", post(change_membership))
         .at("/init", post(init))
         .at("/metrics", get(metrics))
+        .at("/take-snapshot", post(take_snapshot))
         .at("/handle-request", post(handle_request))
         .at("/handle-leader-request", post(handle_leader_request))
 }

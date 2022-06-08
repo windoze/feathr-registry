@@ -49,8 +49,8 @@ pub struct Opt {
     #[clap(long, hide = true, env = "RAFT_JOURNAL_PATH", default_value = "/tmp/journal")]
     pub journal_path: String,
 
-    #[clap(long, hide = true, env = "RAFT_SNAPSHOT_PER_EVENTS", default_value = "5")]
-    pub snapshot_per_events: u32,
+    #[clap(long, hide = true, env = "RAFT_SNAPSHOT_PER_EVENTS", default_value = "100")]
+    pub snapshot_per_events: u64,
 
     #[clap(long, hide = true, env = "RAFT_MANAGEMENT_CODE")]
     pub management_code: Option<String>,
