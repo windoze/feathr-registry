@@ -110,12 +110,15 @@ impl RaftRegistryApp {
 
     pub async fn load_data(&self) -> anyhow::Result<()> {
         let (entities, edges) = load_content().await?;
-        match self.request(None, FeathrApiRequest::BatchLoad { entities, edges }).await {
+        match self
+            .request(None, FeathrApiRequest::BatchLoad { entities, edges })
+            .await
+        {
             FeathrApiResponse::Error(e) => Err(e)?,
-            _ => Ok(())
+            _ => Ok(()),
         }
     }
-    
+
     pub async fn request(&self, opt_seq: Option<u64>, req: FeathrApiRequest) -> FeathrApiResponse {
         let mut is_leader = true;
         let should_forward = match self.raft.is_leader().await {
@@ -190,8 +193,7 @@ impl RaftRegistryApp {
         // `self.forwarder` is unusable at the moment as this node is not member of any cluster
         for seed in seeds {
             debug!("Collecting cluster info from {}", seed);
-            let client =
-                RegistryClient::new(1, seed.to_owned(), self.store.get_management_code());
+            let client = RegistryClient::new(1, seed.to_owned(), self.store.get_management_code());
             if let Ok(metrics) = client.metrics().await {
                 if let Some(leader_id) = metrics.current_leader {
                     if let Some(leader_node) = metrics.membership_config.get_node(&leader_id) {
@@ -206,9 +208,24 @@ impl RaftRegistryApp {
                             leader_node.addr.to_owned(),
                             self.store.get_management_code(),
                         );
+                        // Remove stale old instance of this node
+                        if let Ok(m) = client.metrics().await{
+                            let mut nodes: BTreeSet<RegistryNodeId> = m
+                                .membership_config
+                                .get_nodes()
+                                .keys()
+                                .map(|&id| id)
+                                .collect();
+                            debug!("Found nodes: {:?}", nodes);
+                            if nodes.contains(&self.id) {
+                                debug!("Node with id {} exists in the cluster, clean up stale instance", self.id);
+                                nodes.remove(&self.id);
+                                client.change_membership(&nodes).await?;
+                                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            }
+                        };
                         debug!("Adding this node into the cluster as learner");
-                        if let Ok(resp) = client.add_learner((self.id, self.addr.clone())).await
-                        {
+                        if let Ok(resp) = client.add_learner((self.id, self.addr.clone())).await {
                             trace!("Got response {:?}", resp);
                             debug!("This node has joined the cluster as learner");
                             if promote {
@@ -228,12 +245,12 @@ impl RaftRegistryApp {
                                     if let Ok(resp) = client.change_membership(&nodes).await {
                                         trace!("Got response {:?}", resp);
                                         debug!("Node {} promoted into voter", self.id);
-                                        return Ok(())
+                                        return Ok(());
                                     }
                                 }
                             } else {
                                 // Join as learner
-                                return Ok(())
+                                return Ok(());
                             }
                         }
                     }

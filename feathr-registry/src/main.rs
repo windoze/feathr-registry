@@ -36,17 +36,13 @@ pub struct Opt {
     #[clap(long, env = "API_BASE", default_value = "/api")]
     pub api_base: String,
 
-    /// Init the Raft protocol so this node can be the leader of the cluster or running standalone
-    #[clap(long)]
-    pub init: bool,
-
     /// Join the cluster via seed nodes
     #[clap(long)]
     pub seeds: Vec<String>,
 
-    /// True to join the cluster as voter, otherwise learner
+    /// True to join the cluster learner as, otherwise voter
     #[clap(long)]
-    pub voter: bool,
+    pub learner: bool,
 
     /// True to load data from the database
     #[clap(long)]
@@ -92,6 +88,40 @@ pub struct Opt {
     pub management_code: Option<String>,
 }
 
+/**
+ * Cleanup old logs and snapshots before starting the node
+ */
+fn cleanup_logs(options: &Opt, node_id: u64) -> anyhow::Result<()> {
+    let log_path = PathBuf::from(&options.journal_path)
+        .join(format!("{}-{}.binlog", options.instance_prefix, node_id));
+    println!("Removing journal dir `{}`", log_path.to_string_lossy());
+    remove_dir_all(&log_path).ok();
+    std::fs::create_dir_all(&options.snapshot_path).ok();
+    read_dir(&options.snapshot_path)?
+        .filter(|r| {
+            if let Ok(f) = r {
+                f.file_type()
+                    .ok()
+                    .map(|ft| ft.is_file())
+                    .unwrap_or_default()
+                    && f.file_name()
+                        .to_str()
+                        .map(|f| {
+                            f.starts_with(&format!("{}+{}+", options.instance_prefix, node_id))
+                        })
+                        .unwrap_or_default()
+            } else {
+                false
+            }
+        })
+        .filter_map(|f| f.ok())
+        .for_each(|e| {
+            println!("Removing snapshot `{}`", e.path().to_string_lossy());
+            std::fs::remove_file(e.path()).ok();
+        });
+        Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     common_utils::init_logger();
@@ -104,47 +134,23 @@ async fn main() -> Result<(), anyhow::Error> {
         instance_prefix: options.instance_prefix.clone(),
         journal_path: options.journal_path.clone(),
         snapshot_per_events: options.snapshot_per_events,
-        management_code: options.management_code,
+        management_code: options.management_code.clone(),
     };
 
-    let app = if options.init {
-        if !options.seeds.is_empty() {
-            println!("ERROR: `seeds` must be not set when running as cluster leader");
-            exit(1);
-        }
+    let app = if options.seeds.is_empty() {
         info!("Starting as cluster leader");
-        // Cleanup old logs and snapshots before initializing the new cluster
-        let log_path = PathBuf::from(options.journal_path)
-            .join(format!("{}-1.binlog", options.instance_prefix));
-        println!("Removing journal dir `{}`", log_path.to_string_lossy());
-        remove_dir_all(&log_path).ok();
-        read_dir(options.snapshot_path)?
-            .filter(|r| {
-                if let Ok(f) = r {
-                    f.file_type()
-                        .ok()
-                        .map(|ft| ft.is_file())
-                        .unwrap_or_default()
-                        && f.file_name()
-                            .to_str()
-                            .map(|f| f.starts_with(&format!("{}+1+", options.instance_prefix)))
-                            .unwrap_or_default()
-                } else {
-                    false
-                }
-            })
-            .filter_map(|f| f.ok())
-            .for_each(|e| {
-                println!("Removing snapshot `{}`", e.path().to_string_lossy());
-                std::fs::remove_file(e.path()).ok();
-            });
+        cleanup_logs(&options, 1).ok();
         let app = RaftRegistryApp::new(1, options.http_addr.clone(), raft_config).await;
         app.init().await?;
         app
     } else {
         RaftRegistryApp::new(
             match options.node_id {
-                Some(id) => id,
+                Some(id) => {
+                    info!("Joining cluster with node id = {}", id);
+                    cleanup_logs(&options, id).ok();
+                    id
+                }
                 None => {
                     println!("ERROR: Node ID must be specified.");
                     exit(1);
@@ -199,7 +205,9 @@ async fn main() -> Result<(), anyhow::Error> {
     if !options.seeds.is_empty() {
         let joining_task = async {
             debug!("Joining cluster");
-            app.join_cluster(&options.seeds, options.voter).await.ok();
+            app.join_cluster(&options.seeds, !options.learner)
+                .await
+                .ok();
         };
         tasks.push(Box::pin(joining_task));
     }
