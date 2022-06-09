@@ -32,6 +32,10 @@ pub struct Opt {
     #[clap(long, env = "SERVER_ADDR", default_value = "http://localhost:8000")]
     pub http_addr: String,
 
+    /// Reported Server Listening Address, it may differ from `http_addr` when the node is behind reversed proxy or NAT
+    #[clap(long, env = "EXT_SERVER_ADDR")]
+    pub ext_http_addr: Option<String>,
+
     /// Base Path of the API
     #[clap(long, env = "API_BASE", default_value = "/api")]
     pub api_base: String,
@@ -119,7 +123,7 @@ fn cleanup_logs(options: &Opt, node_id: u64) -> anyhow::Result<()> {
             println!("Removing snapshot `{}`", e.path().to_string_lossy());
             std::fs::remove_file(e.path()).ok();
         });
-        Ok(())
+    Ok(())
 }
 
 #[tokio::main]
@@ -128,6 +132,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Parse the parameters passed by arguments.
     let options = Opt::parse();
+
+    let ext_http_addr = options
+        .ext_http_addr
+        .clone()
+        .unwrap_or_else(|| options.http_addr.clone());
 
     let raft_config = raft_registry::NodeConfig {
         snapshot_path: options.snapshot_path.clone(),
@@ -140,7 +149,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let app = if options.seeds.is_empty() {
         info!("Starting as cluster leader");
         cleanup_logs(&options, 1).ok();
-        let app = RaftRegistryApp::new(1, options.http_addr.clone(), raft_config).await;
+        let app = RaftRegistryApp::new(1, ext_http_addr.clone(), raft_config).await;
         app.init().await?;
         app
     } else {
@@ -156,15 +165,14 @@ async fn main() -> Result<(), anyhow::Error> {
                     exit(1);
                 }
             },
-            options.http_addr.clone(),
+            ext_http_addr.clone(),
             raft_config,
         )
         .await
     };
 
     let api_base = format!("/{}", options.api_base.trim_start_matches("/"));
-    let http_addr = options
-        .http_addr
+    let http_addr = ext_http_addr
         .trim_start_matches("http://")
         .trim_start_matches("https://")
         .to_string();
@@ -195,7 +203,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .data(app.clone());
     let mut tasks: Vec<Pin<Box<dyn Future<Output = ()>>>> = vec![];
     let svc_task = async {
-        Server::new(TcpListener::bind(http_addr))
+        Server::new(TcpListener::bind(options.http_addr))
             .run(route)
             .await
             .log()
