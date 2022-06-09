@@ -28,3 +28,5 @@ registry-provider = { path = "../registry-provider" }
 sql-provider = { path = "../sql-provider" }
 registry-api = { path = "../registry-api" }
 raft-registry = { path = "../raft-registry" }
+
+openssl = { version = "0.10", features = ["vendored"] }
