@@ -50,10 +50,6 @@ pub struct Entity {
     pub entity_type: EntityType,
     pub status: String,
     pub display_text: String,
-    pub classification_names: Vec<String>,
-    pub meaning_names: Vec<String>,
-    pub meanings: Vec<String>,
-    pub is_incomplete: bool,
     pub labels: Vec<String>,
     pub attributes: EntityAttributes,
 }
@@ -68,10 +64,6 @@ impl From<registry_provider::Entity<EntityProperty>> for Entity {
             last_modified_ts: v.properties.last_modified_ts,
             status: format!("{:?}", v.properties.status),
             display_text: v.properties.display_text,
-            classification_names: v.properties.classification_names,
-            meaning_names: v.properties.meaning_names,
-            meanings: v.properties.meanings,
-            is_incomplete: v.properties.is_incomplete,
             labels: v.properties.labels,
             attributes: v.properties.attributes.into(),
         }
