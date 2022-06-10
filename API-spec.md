@@ -196,7 +196,6 @@ Type: Object
 
 | Field            | Type                                    |
 |------------------|-----------------------------------------|
-| relationshipId   | `Guid`                                  |
 | relationshipType | [`RelationshipType`](#relationshiptype) |
 | fromEntityId     | `Guid`                                  |
 | toEntityId       | `Guid`                                  |
