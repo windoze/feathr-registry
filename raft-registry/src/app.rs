@@ -11,7 +11,6 @@ use openraft::Config;
 use openraft::EntryPayload;
 use openraft::Node;
 use openraft::Raft;
-use openraft::SnapshotPolicy;
 use registry_api::ApiError;
 use registry_api::FeathrApiProvider;
 use registry_api::FeathrApiRequest;
@@ -41,13 +40,7 @@ pub struct RaftRegistryApp {
 impl RaftRegistryApp {
     pub async fn new(node_id: RegistryNodeId, addr: String, cfg: crate::NodeConfig) -> Self {
         // Create a configuration for the raft instance.
-
-        let mut config = Config::default().validate().unwrap();
-        config.snapshot_policy = SnapshotPolicy::LogsSinceLast(cfg.snapshot_per_events);
-        config.max_applied_log_to_keep = 20000;
-        config.install_snapshot_timeout = 400;
-
-        let config = Arc::new(config);
+        let config = Arc::new(cfg.raft_config.clone());
 
         // Create a instance of where the Raft data will be stored.
         let es = RegistryStore::open_create(node_id, cfg.clone());

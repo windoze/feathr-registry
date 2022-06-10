@@ -16,7 +16,9 @@ use poem::{
     EndpointExt, Route, Server,
 };
 use poem_openapi::OpenApiService;
-use raft_registry::{management_routes, raft_routes, FeathrApi, RaftRegistryApp, RaftSequencer};
+use raft_registry::{
+    management_routes, raft_routes, FeathrApi, NodeConfig, RaftRegistryApp, RaftSequencer,
+};
 use sql_provider::attach_storage;
 
 mod spa_endpoint;
@@ -56,52 +58,22 @@ pub struct Opt {
     #[clap(long)]
     pub write_db: bool,
 
-    #[clap(
-        long,
-        hide = true,
-        env = "RAFT_SNAPSHOT_PATH",
-        default_value = "/tmp/snapshot"
-    )]
-    pub snapshot_path: String,
-
-    #[clap(
-        long,
-        hide = true,
-        env = "RAFT_INSTANCE_PREFIX",
-        default_value = "feathr-registry"
-    )]
-    pub instance_prefix: String,
-
-    #[clap(
-        long,
-        hide = true,
-        env = "RAFT_JOURNAL_PATH",
-        default_value = "/tmp/journal"
-    )]
-    pub journal_path: String,
-
-    #[clap(
-        long,
-        hide = true,
-        env = "RAFT_SNAPSHOT_PER_EVENTS",
-        default_value = "100"
-    )]
-    pub snapshot_per_events: u64,
-
-    #[clap(long, hide = true, env = "RAFT_MANAGEMENT_CODE")]
-    pub management_code: Option<String>,
+    #[clap(flatten)]
+    pub node_config: NodeConfig,
 }
 
 /**
  * Cleanup old logs and snapshots before starting the node
  */
 fn cleanup_logs(options: &Opt, node_id: u64) -> anyhow::Result<()> {
-    let log_path = PathBuf::from(&options.journal_path)
-        .join(format!("{}-{}.binlog", options.instance_prefix, node_id));
+    let log_path = PathBuf::from(&options.node_config.journal_path).join(format!(
+        "{}-{}.binlog",
+        options.node_config.instance_prefix, node_id
+    ));
     println!("Removing journal dir `{}`", log_path.to_string_lossy());
     remove_dir_all(&log_path).ok();
-    std::fs::create_dir_all(&options.snapshot_path).ok();
-    read_dir(&options.snapshot_path)?
+    std::fs::create_dir_all(&options.node_config.snapshot_path).ok();
+    read_dir(&options.node_config.snapshot_path)?
         .filter(|r| {
             if let Ok(f) = r {
                 f.file_type()
@@ -111,7 +83,10 @@ fn cleanup_logs(options: &Opt, node_id: u64) -> anyhow::Result<()> {
                     && f.file_name()
                         .to_str()
                         .map(|f| {
-                            f.starts_with(&format!("{}+{}+", options.instance_prefix, node_id))
+                            f.starts_with(&format!(
+                                "{}+{}+",
+                                options.node_config.instance_prefix, node_id
+                            ))
                         })
                         .unwrap_or_default()
             } else {
@@ -138,18 +113,12 @@ async fn main() -> Result<(), anyhow::Error> {
         .clone()
         .unwrap_or_else(|| options.http_addr.clone());
 
-    let raft_config = raft_registry::NodeConfig {
-        snapshot_path: options.snapshot_path.clone(),
-        instance_prefix: options.instance_prefix.clone(),
-        journal_path: options.journal_path.clone(),
-        snapshot_per_events: options.snapshot_per_events,
-        management_code: options.management_code.clone(),
-    };
+    let node_config = options.node_config.clone();
 
     let app = if options.seeds.is_empty() {
         info!("Starting as cluster leader");
         cleanup_logs(&options, 1).ok();
-        let app = RaftRegistryApp::new(1, ext_http_addr.clone(), raft_config).await;
+        let app = RaftRegistryApp::new(1, ext_http_addr.clone(), node_config).await;
         app.init().await?;
         app
     } else {
@@ -166,7 +135,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 }
             },
             ext_http_addr.clone(),
-            raft_config,
+            node_config,
         )
         .await
     };
