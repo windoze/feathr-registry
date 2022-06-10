@@ -275,7 +275,15 @@ Type: Object
 ### `GET /projects`
 List **names** of all projects.
 
-Response Type: `array<string>`
+Query Parameters:
+
+| Field   | Type   |
+|---------|--------|
+| keyword | string |
+| size    | number |
+| offset  | number |
+
+Response Type: [`array<Entity>`](#entity)
 
 ### `GET /projects/{project}`
 Get everything defined in the project
@@ -285,7 +293,55 @@ Response Type: [`EntitiesAndRelationships`](#entitiesandrelationships)
 ### `GET /projects/{project}/datasources`
 Get all sources defined in the project.
 
+Query Parameters:
+
+| Field   | Type   |
+|---------|--------|
+| keyword | string |
+| size    | number |
+| offset  | number |
+
 Response Type: [`array<Entity>`](#entity)
+
+### `GET /projects/{project}/derivedfeatures`
+Get all derived features in the project, or only features meet the search criteria in the project.
+
+Query Parameters:
+
+| Field   | Type   |
+|---------|--------|
+| keyword | string |
+| size    | number |
+| offset  | number |
+
+
+Response Type: Object
+
+| Field    | Type                       |
+|----------|----------------------------|
+| features | [`array<Entity>`](#entity) |
+
+### `GET /projects/{project}/anchors`
+Get all anchors in the project, or only anchors meet the search criteria in the project.
+
+Query Parameters:
+
+| Field   | Type   |
+|---------|--------|
+| keyword | string |
+| size    | number |
+| offset  | number |
+
+### `GET /projects/{project}/anchors/{anchor}/features`
+Get all anchor features inside an anchor, or only anchor features meet the search criteria in the anchor.
+
+Query Parameters:
+
+| Field   | Type   |
+|---------|--------|
+| keyword | string |
+| size    | number |
+| offset  | number |
 
 ### `GET /projects/{project}/features`
 Get all anchor features and derived features in the project, or only features meet the search criteria in the project.
