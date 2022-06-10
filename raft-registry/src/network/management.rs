@@ -10,7 +10,9 @@ use poem::{
     web::{Data, Json, TypedHeader},
     IntoResponse, Route,
 };
+use poem_openapi::payload::PlainText;
 use registry_api::{ApiError, FeathrApiProvider, FeathrApiRequest, FeathrApiResponse};
+use reqwest::StatusCode;
 
 use crate::{ManagementCode, RaftRegistryApp, RegistryNodeId, RegistryTypeConfig};
 
@@ -141,6 +143,30 @@ pub async fn handle_leader_request(
     }
 }
 
+/**
+ * Check if the program is still alive
+ */
+#[handler]
+pub fn liveness() -> poem::Result<impl IntoResponse> {
+    Ok(PlainText("OK"))
+}
+
+/**
+ * Check if the node is in a good state
+ */
+#[handler]
+pub async fn readiness(app: Data<&RaftRegistryApp>) -> poem::Result<impl IntoResponse> {
+    let m = app.raft.metrics().borrow().clone();
+    Ok(
+        if m.running_state.is_ok() && m.current_leader.is_some() && m.last_applied.is_some() {
+            PlainText("OK").with_status(StatusCode::OK)
+        } else {
+            PlainText("Not Ok").with_status(StatusCode::BAD_REQUEST)
+        }
+        .into_response(),
+    )
+}
+
 pub fn management_routes(route: Route) -> Route {
     route
         .at("/add-learner", post(add_learner))
@@ -149,4 +175,6 @@ pub fn management_routes(route: Route) -> Route {
         .at("/metrics", get(metrics))
         .at("/handle-request", post(handle_request))
         .at("/handle-leader-request", post(handle_leader_request))
+        .at("/ping", get(liveness))
+        .at("/ready", get(readiness))
 }
