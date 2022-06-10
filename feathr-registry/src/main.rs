@@ -9,7 +9,7 @@ use std::{
 use clap::Parser;
 use common_utils::Logged;
 use futures::{future::join_all, Future};
-use log::{debug, info, warn};
+use log::{debug, info};
 use poem::{
     listener::TcpListener,
     middleware::{Cors, Tracing},
@@ -31,7 +31,7 @@ pub struct Opt {
     pub node_id: Option<u64>,
 
     /// Server Listening Address
-    #[clap(long, env = "SERVER_ADDR", default_value = "http://localhost:8000")]
+    #[clap(long, env = "SERVER_ADDR", default_value = "0.0.0.0:8000")]
     pub http_addr: String,
 
     /// Reported Server Listening Address, it may differ from `http_addr` when the node is behind reversed proxy or NAT
@@ -57,6 +57,10 @@ pub struct Opt {
     /// True to write updates to the database
     #[clap(long)]
     pub write_db: bool,
+
+    /// Do not init cluster when joining failed
+    #[clap(long)]
+    pub no_init: bool,
 
     #[clap(flatten)]
     pub node_config: NodeConfig,
@@ -119,7 +123,7 @@ async fn main() -> Result<(), anyhow::Error> {
         info!("Starting as cluster leader");
         cleanup_logs(&options, 1).ok();
         let app = RaftRegistryApp::new(1, ext_http_addr.clone(), node_config).await;
-        app.init().await?;
+        app.init().await.ok();
         app
     } else {
         RaftRegistryApp::new(
@@ -172,39 +176,33 @@ async fn main() -> Result<(), anyhow::Error> {
         .data(app.clone());
     let mut tasks: Vec<Pin<Box<dyn Future<Output = ()>>>> = vec![];
     let svc_task = async {
-        Server::new(TcpListener::bind(options.http_addr))
-            .run(route)
-            .await
-            .log()
-            .ok();
+        Server::new(TcpListener::bind(
+            options.http_addr.trim_start_matches("http://"),
+        ))
+        .run(route)
+        .await
+        .log()
+        .ok();
     };
     tasks.push(Box::pin(svc_task));
-    if !options.seeds.is_empty() {
-        let joining_task = async {
+    let raft_task = async {
+        if !options.seeds.is_empty() {
             debug!("Joining cluster");
-            app.join_cluster(&options.seeds, !options.learner)
+            app.join_or_init(&options.seeds, !options.no_init)
                 .await
                 .ok();
-        };
-        tasks.push(Box::pin(joining_task));
-    }
-    if options.load_db {
-        let loading_task = async {
-            match app.load_data().await {
-                Ok(_) => {
-                    if options.write_db {
-                        // This is a load-write node
-                        attach_storage(&mut app.store.state_machine.write().await.registry);
-                    }
-                }
-                Err(e) => warn!("Failed to load data, error {:?}", e),
-            };
-        };
-        tasks.push(Box::pin(loading_task));
-    } else if options.write_db {
-        // This is a write-only node
-        attach_storage(&mut app.store.state_machine.write().await.registry);
-    }
+        }
+
+        if options.load_db {
+            debug!("Loading data from db");
+            app.load_data().await.log().ok();
+        }
+        if options.write_db {
+            // This is a writer node
+            attach_storage(&mut app.store.state_machine.write().await.registry);
+        }
+    };
+    tasks.push(Box::pin(raft_task));
     join_all(tasks.into_iter()).await;
     Ok(())
 }

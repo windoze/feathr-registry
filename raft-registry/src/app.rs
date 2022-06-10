@@ -16,6 +16,7 @@ use registry_api::FeathrApiProvider;
 use registry_api::FeathrApiRequest;
 use registry_api::FeathrApiResponse;
 use sql_provider::load_content;
+use tokio::net::ToSocketAddrs;
 
 use crate::ManagementCode;
 use crate::RegistryClient;
@@ -184,7 +185,7 @@ impl RaftRegistryApp {
 
     pub async fn join_cluster(&self, seeds: &[String], promote: bool) -> anyhow::Result<()> {
         // `self.forwarder` is unusable at the moment as this node is not member of any cluster
-        for seed in seeds {
+        for seed in expand_seeds(seeds).await? {
             debug!("Collecting cluster info from {}", seed);
             let client = RegistryClient::new(1, seed.to_owned(), self.store.get_management_code());
             if let Ok(metrics) = client.metrics().await {
@@ -202,7 +203,7 @@ impl RaftRegistryApp {
                             self.store.get_management_code(),
                         );
                         // Remove stale old instance of this node
-                        if let Ok(m) = client.metrics().await{
+                        if let Ok(m) = client.metrics().await {
                             let mut nodes: BTreeSet<RegistryNodeId> = m
                                 .membership_config
                                 .get_nodes()
@@ -252,5 +253,57 @@ impl RaftRegistryApp {
             debug!("Failed to join the cluster via seed {}", seed);
         }
         Err(anyhow::Error::msg("Failed to join the cluster"))
+    }
+
+    pub async fn join_or_init(&self, seeds: &[String], init: bool) -> anyhow::Result<()> {
+        match self.join_cluster(seeds, true).await {
+            Err(_) if init => {
+                self.init().await?;
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+}
+
+/**
+ * Discover seeds via DNS, it should work with K8S internal DNS service
+ * TODO: Support more discover method, e.g. K8S API, broadcasting.
+ */
+async fn expand_seeds<T>(seeds: &[T]) -> anyhow::Result<Vec<String>>
+where
+    T: ToSocketAddrs,
+{
+    let mut ret = vec![];
+    for seed in seeds {
+        ret.extend(tokio::net::lookup_host(seed).await?.map(|sa| {
+            if sa.is_ipv4() {
+                format!("{}:{}", sa.ip(), sa.port())
+            } else {
+                format!("[{}]:{}", sa.ip(), sa.port())
+            }
+        }))
+    }
+    Ok(ret)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::expand_seeds;
+
+    #[tokio::test]
+    async fn test_expand() {
+        let seeds = [
+            "www.qq.com:80",
+            "www.un.org:443",
+            "www.baidu.com:443",
+            "127.0.0.1:12345",
+            "[::1]:54321",
+        ];
+        let r = expand_seeds(&seeds).await.unwrap();
+        println!("{:?}", r);
+        assert!(r.len() > 3);
+        assert!(r.contains(&"127.0.0.1:12345".to_string()));
+        assert!(r.contains(&"[::1]:54321".to_string()));
     }
 }
