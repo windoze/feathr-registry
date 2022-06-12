@@ -438,6 +438,7 @@ where
                     project_id_or_name,
                     mut definition,
                 } => {
+                    debug!("Creating Source in project {}: {:?}",project_id_or_name, definition);
                     let project_id = get_id(this, project_id_or_name).await?;
                     let project_name = get_name(this, project_id).await?;
                     definition.qualified_name = format!("{}__{}", project_name, definition.name);
@@ -552,10 +553,13 @@ where
                 FeathrApiRequest::CreateAnchorFeature {
                     project_id_or_name,
                     anchor_id_or_name,
-                    definition,
+                    mut definition,
                 } => {
                     let (project_id, anchor_id) =
                         get_child_id(this, project_id_or_name, anchor_id_or_name).await?;
+                    let project_name = get_name(this, project_id).await?;
+                    let anchor_name = get_name(this, anchor_id).await?;
+                    definition.qualified_name = format!("{}__{}__{}", project_name, anchor_name, definition.name);
                     this.new_anchor_feature(project_id, anchor_id, &definition.try_into()?)
                         .await
                         .into()

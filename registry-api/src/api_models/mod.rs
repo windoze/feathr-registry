@@ -45,6 +45,7 @@ impl TryInto<registry_provider::ProjectDef> for ProjectDef {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[serde(rename_all = "camelCase")]
+#[oai(rename_all = "camelCase")]
 pub struct SourceDef {
     #[oai(skip)]
     pub id: String,
@@ -52,15 +53,20 @@ pub struct SourceDef {
     #[oai(skip)]
     pub qualified_name: String,
     #[serde(rename = "type")]
+    #[oai(rename = "type")]
     pub source_type: String,
     pub path: String,
     #[oai(default)]
+    #[serde(default)]
     pub event_timestamp_column: Option<String>,
     #[oai(default)]
+    #[serde(default)]
     pub timestamp_format: Option<String>,
     #[oai(default)]
+    #[serde(default)]
     pub preprocessing: Option<String>,
     #[oai(default)]
+    #[serde(default)]
     pub tags: HashMap<String, String>,
 }
 
@@ -84,6 +90,7 @@ impl TryInto<registry_provider::SourceDef> for SourceDef {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[serde(rename_all = "camelCase")]
+#[oai(rename_all = "camelCase")]
 pub struct AnchorDef {
     #[oai(skip)]
     pub id: String,
@@ -424,5 +431,17 @@ impl From<Uuid> for CreationResponse {
         Self {
             guid: id.to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::SourceDef;
+
+    #[test]
+    fn des_source() {
+        let s = r#"{"name":"PASSTHROUGH","type":"PASSTHROUGH","path":"PASSTHROUGH","tags":{}}"#;
+        let src: SourceDef = serde_json::from_str(s).unwrap();
+        println!("{:#?}", src);
     }
 }
