@@ -6,7 +6,7 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{ANCHOR_FEATURE_TYPE, SOURCE_TYPE, ANCHOR_TYPE};
+use crate::{ANCHOR_FEATURE_TYPE, ANCHOR_TYPE, SOURCE_TYPE, ContentEq};
 
 fn is_default<T>(v: &T) -> bool
 where
@@ -164,6 +164,16 @@ pub struct AnchorFeatureAttributes {
     pub tags: HashMap<String, String>,
 }
 
+impl ContentEq for AnchorFeatureAttributes {
+    fn content_eq(&self, other: &Self) -> bool {
+        self.qualified_name == other.qualified_name
+            && self.name == other.name
+            && self.type_ == other.type_
+            && self.transformation == other.transformation
+            && self.key == other.key
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DerivedFeatureAttributes {
     #[serde(rename = "qualifiedName")]
@@ -179,6 +189,18 @@ pub struct DerivedFeatureAttributes {
     pub input_derived_features: HashSet<EntityRef>,
     #[serde(skip_serializing_if = "is_default", default)]
     pub tags: HashMap<String, String>,
+}
+
+impl ContentEq for DerivedFeatureAttributes {
+    fn content_eq(&self, other: &Self) -> bool {
+        self.qualified_name == other.qualified_name
+            && self.name == other.name
+            && self.type_ == other.type_
+            && self.transformation == other.transformation
+            && self.key == other.key
+            && self.input_anchor_features == other.input_anchor_features
+            && self.input_derived_features == other.input_derived_features
+    }
 }
 
 impl DerivedFeatureAttributes {
@@ -221,7 +243,11 @@ impl DerivedFeatureAttributes {
         });
     }
 
-    pub(crate) fn remove_input_derived_feature(&mut self, id: Uuid, attr: &DerivedFeatureAttributes) {
+    pub(crate) fn remove_input_derived_feature(
+        &mut self,
+        id: Uuid,
+        attr: &DerivedFeatureAttributes,
+    ) {
         debug!(
             "Removing derived feature '{}' from derived feature '{}' input",
             attr.name, self.name
@@ -244,6 +270,14 @@ pub struct AnchorAttributes {
     pub source: Option<EntityRef>,
     #[serde(skip_serializing_if = "is_default", default)]
     pub tags: HashMap<String, String>,
+}
+
+impl ContentEq for AnchorAttributes {
+    fn content_eq(&self, other: &Self) -> bool {
+        self.qualified_name == other.qualified_name
+            && self.name == other.name
+            && self.source == other.source
+    }
 }
 
 impl AnchorAttributes {
@@ -305,6 +339,12 @@ pub struct ProjectAttributes {
     pub derived_features: HashSet<EntityRef>,
     #[serde(skip_serializing_if = "is_default", default)]
     pub tags: HashMap<String, String>,
+}
+
+impl ContentEq for ProjectAttributes {
+    fn content_eq(&self, other: &Self) -> bool {
+        self.qualified_name == other.qualified_name && self.name == other.name
+    }
 }
 
 impl ProjectAttributes {

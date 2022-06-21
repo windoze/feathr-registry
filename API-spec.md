@@ -282,7 +282,7 @@ Query Parameters:
 | size    | number |
 | offset  | number |
 
-Response Type: [`array<Entity>`](#entity)
+Response Type: [`array<String>`](#entity)
 
 ### `GET /projects/{project}`
 Get everything defined in the project

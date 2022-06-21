@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_utils::Appliable;
+use log::warn;
 use poem::{web::Data, Endpoint, IntoResponse, Middleware, Request, Response};
 use poem_openapi::{
     param::{Header, Path, Query},
@@ -90,7 +92,7 @@ impl FeathrApi {
         keyword: Query<Option<String>>,
         size: Query<Option<usize>>,
         offset: Query<Option<usize>>,
-    ) -> poem::Result<Json<Entities>> {
+    ) -> poem::Result<Json<Vec<String>>> {
         data.0
             .request(
                 opt_seq.0,
@@ -100,8 +102,11 @@ impl FeathrApi {
                     offset: offset.0,
                 },
             )
-            .await
-            .into_entities()
+            .await.apply(|r| {
+                warn!("rr {:#?}", r);
+                r
+            })
+            .into_entity_names()
             .map(Json)
     }
 

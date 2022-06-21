@@ -176,7 +176,7 @@ where
 #[allow(dead_code)]
 impl<EntityProp, EdgeProp> Registry<EntityProp, EdgeProp>
 where
-    EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
+    EntityProp: Clone + Debug + PartialEq + Eq + ContentEq + EntityPropMutator + ToDocString + Send + Sync,
     EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     pub(crate) fn new() -> Self {
@@ -480,6 +480,11 @@ where
         T2: ToString,
     {
         if self.name_id_map.contains_key(&qualified_name.to_string()) {
+            let e = self.get_entity_by_qualified_name(&qualified_name.to_string()).await?;
+            if e.properties.content_eq(&properties) {
+                // Creating an exactly same entity, just return existing id without reporting error
+                return Ok(e.id)
+            }
             return Err(RegistryError::EntityNameExists(qualified_name.to_string()));
         }
         let id = Uuid::new_v4();
@@ -512,9 +517,15 @@ where
         T2: ToString,
     {
         if self.node_id_map.contains_key(&uuid) {
+            // Id conflict, very unlikely to happen if the UUID is generated correctly
             return Err(RegistryError::EntityIdExists(uuid));
         }
         if self.name_id_map.contains_key(&qualified_name.to_string()) {
+            let e = self.get_entity_by_qualified_name(&qualified_name.to_string()).await?;
+            if e.properties.content_eq(&properties)  {
+                // Creating an exactly same entity, just return existing id without reporting error
+                return Ok(e.id)
+            }
             return Err(RegistryError::EntityNameExists(qualified_name.to_string()));
         }
         let idx = self
@@ -763,6 +774,12 @@ mod tests {
         }
     }
 
+    impl ContentEq for DummyEntityProp {
+        fn content_eq(&self, _: &Self) -> bool {
+            false
+        }
+    }
+
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct DummyEdgeProp;
 
@@ -779,15 +796,11 @@ mod tests {
             Ok(DummyEntityProp)
         }
 
-        fn new_anchor_feature(
-            _definition: &AnchorFeatureDef,
-        ) -> Result<Self, RegistryError> {
+        fn new_anchor_feature(_definition: &AnchorFeatureDef) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
         }
 
-        fn new_derived_feature(
-            _definition: &DerivedFeatureDef,
-        ) -> Result<Self, RegistryError> {
+        fn new_derived_feature(_definition: &DerivedFeatureDef) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
         }
 

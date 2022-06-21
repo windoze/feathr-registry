@@ -15,14 +15,14 @@ pub use db_registry::Registry;
 use registry_provider::{
     AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgePropMutator, EdgeType, Entity,
     EntityPropMutator, EntityType, ProjectDef, RegistryError, RegistryProvider, SourceDef,
-    ToDocString,
+    ToDocString, ContentEq,
 };
 use uuid::Uuid;
 
 #[async_trait]
 impl<EntityProp, EdgeProp> RegistryProvider<EntityProp, EdgeProp> for Registry<EntityProp, EdgeProp>
 where
-    EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
+    EntityProp: Clone + Debug + PartialEq + Eq + ContentEq + EntityPropMutator + ToDocString + Send + Sync,
     EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     /**

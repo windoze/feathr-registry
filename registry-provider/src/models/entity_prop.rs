@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    AnchorDef, AnchorFeatureDef, DerivedFeatureDef, EdgeType, Entity,
-    EntityPropMutator, EntityType, ProjectDef, SourceDef, RegistryError, Attributes, ProjectAttributes, SourceAttributes, AnchorAttributes, AnchorFeatureAttributes, DerivedFeatureAttributes,
+    AnchorAttributes, AnchorDef, AnchorFeatureAttributes, AnchorFeatureDef, Attributes,
+    DerivedFeatureAttributes, DerivedFeatureDef, EdgeType, Entity, EntityPropMutator, EntityType,
+    ProjectAttributes, ProjectDef, RegistryError, SourceAttributes, SourceDef, ContentEq,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,6 +26,15 @@ pub struct EntityProperty {
     pub labels: Vec<String>,
     #[serde(flatten)]
     pub attributes: Attributes,
+}
+
+/**
+ * Only attributes are worthy to compare
+ */
+impl ContentEq for EntityProperty {
+    fn content_eq(&self, other: &Self) -> bool {
+        self.attributes == other.attributes
+    }
 }
 
 impl EntityPropMutator for EntityProperty {
@@ -76,7 +86,7 @@ impl EntityPropMutator for EntityProperty {
                 qualified_name: definition.qualified_name.to_owned(),
                 name: definition.name.to_owned(),
                 features: Default::default(),
-                source: None,   // Will be set later by `connect`
+                source: None, // Will be set later by `connect`
                 tags: definition.tags.to_owned(),
             }),
         })

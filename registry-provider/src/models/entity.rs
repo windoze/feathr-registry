@@ -35,6 +35,9 @@ impl Default for EntityType {
     }
 }
 
+pub trait ContentEq {
+    fn content_eq(&self, other: &Self) -> bool;
+}
 
 #[derive(Clone, Debug, Eq)]
 pub struct Entity<Prop>

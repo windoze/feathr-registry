@@ -125,6 +125,7 @@ pub enum FeathrApiResponse {
 
     Unit,
     Uuid(Uuid),
+    EntityNames(Vec<String>),
     Entity(Entity),
     Entities(Entities),
     EntityLineage(EntityLineage),
@@ -138,6 +139,15 @@ impl FeathrApiResponse {
             _ => panic!("Shouldn't reach here"),
         }
     }
+
+    pub fn into_entity_names(self) -> poem::Result<Vec<String>> {
+        match self {
+            FeathrApiResponse::Error(e) => Err(e.into()),
+            FeathrApiResponse::EntityNames(v) => Ok(v),
+            _ => panic!("Shouldn't reach here"),
+        }
+    }
+
     pub fn into_entity(self) -> poem::Result<Entity> {
         match self {
             FeathrApiResponse::Error(e) => Err(e.into()),
@@ -166,6 +176,15 @@ impl From<Result<(), RegistryError>> for FeathrApiResponse {
     fn from(v: Result<(), RegistryError>) -> Self {
         match v {
             Ok(_) => Self::Unit,
+            Err(e) => Self::Error(e.into()),
+        }
+    }
+}
+
+impl From<Result<Vec<String>, RegistryError>> for FeathrApiResponse {
+    fn from(v: Result<Vec<String>, RegistryError>) -> Self {
+        match v {
+            Ok(v) => Self::EntityNames(v),
             Err(e) => Self::Error(e.into()),
         }
     }
@@ -359,22 +378,25 @@ where
                     keyword,
                     size,
                     offset,
-                } => {
-                    if keyword.is_blank() {
-                        this.get_entry_points().await.into()
-                    } else {
-                        search_entities(
-                            this,
-                            keyword,
-                            size,
-                            offset,
-                            set![registry_provider::EntityType::Project],
-                            None,
-                        )
-                        .await
-                        .into()
-                    }
+                } => if keyword.is_blank() {
+                    this.get_entry_points().await
+                } else {
+                    search_entities(
+                        this,
+                        keyword,
+                        size,
+                        offset,
+                        set![registry_provider::EntityType::Project],
+                        None,
+                    )
+                    .await
                 }
+                .map(|r| {
+                    r.into_iter()
+                        .map(|e| e.qualified_name)
+                        .collect::<Vec<String>>()
+                })
+                .into(),
                 FeathrApiRequest::GetProject { id_or_name } => this
                     .get_entity_by_id_or_qualified_name(&id_or_name)
                     .await
@@ -438,7 +460,10 @@ where
                     project_id_or_name,
                     mut definition,
                 } => {
-                    debug!("Creating Source in project {}: {:?}",project_id_or_name, definition);
+                    debug!(
+                        "Creating Source in project {}: {:?}",
+                        project_id_or_name, definition
+                    );
                     let project_id = get_id(this, project_id_or_name).await?;
                     let project_name = get_name(this, project_id).await?;
                     definition.qualified_name = format!("{}__{}", project_name, definition.name);
@@ -559,7 +584,8 @@ where
                         get_child_id(this, project_id_or_name, anchor_id_or_name).await?;
                     let project_name = get_name(this, project_id).await?;
                     let anchor_name = get_name(this, anchor_id).await?;
-                    definition.qualified_name = format!("{}__{}__{}", project_name, anchor_name, definition.name);
+                    definition.qualified_name =
+                        format!("{}__{}__{}", project_name, anchor_name, definition.name);
                     this.new_anchor_feature(project_id, anchor_id, &definition.try_into()?)
                         .await
                         .into()

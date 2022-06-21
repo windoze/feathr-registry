@@ -1,14 +1,17 @@
-use std::fmt::Debug;
 use common_utils::Logged;
 use poem::{error::ResponseError, http::StatusCode};
 use registry_provider::RegistryError;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error, Serialize, Deserialize)]
 pub enum ApiError {
     #[error("Entity('{0}') is not found")]
     NotFoundError(String),
+
+    #[error("{0}")]
+    Conflict(String),
 
     #[error("{0}")]
     BadRequest(String),
@@ -24,6 +27,7 @@ impl ResponseError for ApiError {
     fn status(&self) -> poem::http::StatusCode {
         match &self {
             ApiError::NotFoundError(_) => StatusCode::NOT_FOUND,
+            ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -38,8 +42,8 @@ impl From<RegistryError> for ApiError {
             RegistryError::EntityNotFound(e) => ApiError::NotFoundError(e),
             RegistryError::InvalidEntity(id) => ApiError::NotFoundError(id.to_string()),
             RegistryError::InvalidEdge(_, _) => ApiError::InternalError(format!("{:?}", e)),
-            RegistryError::EntityNameExists(_) => ApiError::BadRequest(format!("{:?}", e)),
-            RegistryError::EntityIdExists(_) => ApiError::BadRequest(format!("{:?}", e)),
+            RegistryError::EntityNameExists(_) => ApiError::Conflict(format!("{:?}", e)),
+            RegistryError::EntityIdExists(_) => ApiError::Conflict(format!("{:?}", e)),
             RegistryError::DeleteInUsed(_) => ApiError::BadRequest(format!("{:?}", e)),
             RegistryError::FtsError(_) => ApiError::InternalError(format!("{:?}", e)),
             RegistryError::ExternalStorageError(_) => ApiError::InternalError(format!("{:?}", e)),

@@ -8,7 +8,7 @@ pub struct NodeConfig {
         long,
         hide = true,
         env = "RAFT_SNAPSHOT_PATH",
-        default_value = "/tmp/snapshot"
+        default_value = "./snapshot"
     )]
     pub snapshot_path: String,
 
@@ -24,7 +24,7 @@ pub struct NodeConfig {
         long,
         hide = true,
         env = "RAFT_JOURNAL_PATH",
-        default_value = "/tmp/journal"
+        default_value = "./journal"
     )]
     pub journal_path: String,
 
