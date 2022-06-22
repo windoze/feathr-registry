@@ -3,7 +3,7 @@ use std::{fmt::Debug, hash::Hash};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{EdgeType, EdgePropMutator, Edge};
+use crate::{Edge, EdgePropMutator, EdgeType};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct EdgeProperty {
@@ -33,13 +33,13 @@ impl EdgePropMutator for EdgeProperty {
     }
 }
 
-impl Into<Edge<EdgeProperty>> for EdgeProperty {
-    fn into(self) -> Edge<EdgeProperty> {
+impl From<EdgeProperty> for Edge<EdgeProperty> {
+    fn from(v: EdgeProperty) -> Self {
         Edge::<EdgeProperty> {
-            from: self.from,
-            to: self.to,
-            edge_type: self.edge_type,
-            properties: self,
+            from: v.from,
+            to: v.to,
+            edge_type: v.edge_type,
+            properties: v,
         }
     }
 }

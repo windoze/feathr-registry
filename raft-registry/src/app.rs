@@ -79,14 +79,14 @@ impl RaftRegistryApp {
             Some(c) => match code.map(|c| c.code().to_string()) {
                 Some(code) => {
                     if c == code {
-                        return Ok(());
+                        Ok(())
                     } else {
-                        return Err(ApiError::Forbidden("forbidden".to_string()))?;
+                        Err(ApiError::Forbidden("forbidden".to_string()))?
                     }
                 }
-                None => return Err(ApiError::Forbidden("forbidden".to_string()))?,
+                None => Err(ApiError::Forbidden("forbidden".to_string()))?,
             },
-            None => return Ok(()),
+            None => Ok(()),
         }
     }
 
@@ -208,7 +208,7 @@ impl RaftRegistryApp {
                                 .membership_config
                                 .get_nodes()
                                 .keys()
-                                .map(|&id| id)
+                                .copied()
                                 .collect();
                             debug!("Found nodes: {:?}", nodes);
                             if nodes.contains(&self.id) {
@@ -231,7 +231,7 @@ impl RaftRegistryApp {
                                         .membership_config
                                         .get_nodes()
                                         .keys()
-                                        .map(|&id| id)
+                                        .copied()
                                         .collect();
                                     debug!("Found nodes: {:?}", nodes);
                                     nodes.insert(self.id);

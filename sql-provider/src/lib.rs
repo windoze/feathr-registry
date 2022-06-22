@@ -34,8 +34,8 @@ where
         edges: Vec<Edge<EdgeProp>>,
     ) -> Result<(), RegistryError> {
         self.batch_load(
-            entities.into_iter().map(|e| e.into()),
-            edges.into_iter().map(|e| e.into()),
+            entities.into_iter(),
+            edges.into_iter(),
         )
         .await
     }
@@ -58,7 +58,7 @@ where
         self.graph
             .node_weight(self.get_idx(uuid)?)
             .cloned()
-            .ok_or_else(|| RegistryError::InvalidEntity(uuid))
+            .ok_or(RegistryError::InvalidEntity(uuid))
     }
 
     /**
@@ -84,8 +84,7 @@ where
             .filter_map(|id| {
                 self.get_idx(id)
                     .ok()
-                    .map(|idx| self.graph.node_weight(idx).cloned())
-                    .flatten()
+                    .and_then(|idx| self.graph.node_weight(idx).cloned())
             })
             .collect())
     }
@@ -175,7 +174,7 @@ where
         definition: &ProjectDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_project(&definition)?;
+        let prop = EntityProp::new_project(definition)?;
         self.insert_entity(
             definition.id,
             EntityType::Project,
@@ -193,7 +192,7 @@ where
         definition: &SourceDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_source(&definition)?;
+        let prop = EntityProp::new_source(definition)?;
         let source_id = self
             .insert_entity(
                 definition.id,
@@ -221,7 +220,7 @@ where
         definition: &AnchorDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_anchor(&definition)?;
+        let prop = EntityProp::new_anchor(definition)?;
         let anchor_id = self
             .insert_entity(
                 definition.id,
@@ -257,7 +256,7 @@ where
         definition: &AnchorFeatureDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_anchor_feature(&definition)?;
+        let prop = EntityProp::new_anchor_feature(definition)?;
         let feature_id = self
             .insert_entity(
                 definition.id,
@@ -303,7 +302,7 @@ where
         definition: &DerivedFeatureDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_derived_feature(&definition)?;
+        let prop = EntityProp::new_derived_feature(definition)?;
         let feature_id = self
             .insert_entity(
                 definition.id,

@@ -146,7 +146,7 @@ where
         &self,
         id_or_name: &str,
     ) -> Result<Entity<EntityProp>, RegistryError> {
-        match Uuid::parse_str(&id_or_name) {
+        match Uuid::parse_str(id_or_name) {
             Ok(id) => self.get_entity(id).await,
             Err(_) => self
                 .get_entity_by_qualified_name(id_or_name)

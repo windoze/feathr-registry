@@ -72,7 +72,7 @@ impl FtsIndex {
         schema_builder.add_text_field("id", STRING.set_stored());
         schema_builder.add_text_field("scopes", TEXT);
         schema_builder.add_text_field("type", STRING);
-        schema_builder.add_text_field("body", TEXT.set_indexing_options(indexing_option.clone()));
+        schema_builder.add_text_field("body", TEXT.set_indexing_options(indexing_option));
         let schema = schema_builder.build();
         let name_field = schema.get_field("name").unwrap();
         let id_field = schema.get_field("id").unwrap();
@@ -188,17 +188,15 @@ impl FtsIndex {
             .into_iter()
             .filter_map(|(_, addr)| {
                 let doc = searcher.doc(addr).ok();
-                doc.map(|d| {
+                doc.and_then(|d| {
                     d.into_iter()
                         .find(|f| f.field == self.id_field)
-                        .map(|f| {
+                        .and_then(|f| {
                             debug!("Found id: {}", f.value.as_text().unwrap_or_default());
                             f.value.as_text().map(|s| Uuid::parse_str(s).ok())
                         })
                         .flatten()
-                        .flatten()
                 })
-                .flatten()
             })
             .collect())
     }

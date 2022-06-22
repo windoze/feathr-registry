@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    AnchorAttributes, AnchorDef, AnchorFeatureAttributes, AnchorFeatureDef, Attributes,
+    AnchorAttributes, AnchorDef, AnchorFeatureAttributes, AnchorFeatureDef, Attributes, ContentEq,
     DerivedFeatureAttributes, DerivedFeatureDef, EdgeType, Entity, EntityPropMutator, EntityType,
-    ProjectAttributes, ProjectDef, RegistryError, SourceAttributes, SourceDef, ContentEq,
+    ProjectAttributes, ProjectDef, RegistryError, SourceAttributes, SourceDef,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -142,19 +142,19 @@ impl EntityPropMutator for EntityProperty {
                 &mut to.properties.attributes,
             ) {
                 (Attributes::Anchor(from), Attributes::AnchorFeature(to)) => {
-                    from.add_anchor_feature(to_id, &to);
+                    from.add_anchor_feature(to_id, to);
                 }
                 (Attributes::Project(from), Attributes::AnchorFeature(to)) => {
-                    from.add_anchor_feature(to_id, &to);
+                    from.add_anchor_feature(to_id, to);
                 }
                 (Attributes::Project(from), Attributes::DerivedFeature(to)) => {
-                    from.add_derived_feature(to_id, &to);
+                    from.add_derived_feature(to_id, to);
                 }
                 (Attributes::Project(from), Attributes::Anchor(to)) => {
-                    from.add_anchor(to_id, &to);
+                    from.add_anchor(to_id, to);
                 }
                 (Attributes::Project(from), Attributes::Source(to)) => {
-                    from.add_source(to_id, &to);
+                    from.add_source(to_id, to);
                 }
                 _ => {}
             }
@@ -164,13 +164,13 @@ impl EntityPropMutator for EntityProperty {
                 &mut to.properties.attributes,
             ) {
                 (Attributes::DerivedFeature(from), Attributes::AnchorFeature(to)) => {
-                    from.add_input_anchor_feature(to_id, &to);
+                    from.add_input_anchor_feature(to_id, to);
                 }
                 (Attributes::DerivedFeature(from), Attributes::DerivedFeature(to)) => {
-                    from.add_input_derived_feature(to_id, &to);
+                    from.add_input_derived_feature(to_id, to);
                 }
                 (Attributes::Anchor(from), Attributes::Source(to)) => {
-                    from.set_source(to_id, &to);
+                    from.set_source(to_id, to);
                 }
                 _ => {}
             }
@@ -191,19 +191,19 @@ impl EntityPropMutator for EntityProperty {
                 &mut to.properties.attributes,
             ) {
                 (Attributes::Anchor(from), Attributes::AnchorFeature(to)) => {
-                    from.remove_anchor_feature(to_id, &to);
+                    from.remove_anchor_feature(to_id, to);
                 }
                 (Attributes::Project(from), Attributes::AnchorFeature(to)) => {
-                    from.remove_anchor_feature(to_id, &to);
+                    from.remove_anchor_feature(to_id, to);
                 }
                 (Attributes::Project(from), Attributes::DerivedFeature(to)) => {
-                    from.remove_derived_feature(to_id, &to);
+                    from.remove_derived_feature(to_id, to);
                 }
                 (Attributes::Project(from), Attributes::Anchor(to)) => {
-                    from.remove_anchor(to_id, &to);
+                    from.remove_anchor(to_id, to);
                 }
                 (Attributes::Project(from), Attributes::Source(to)) => {
-                    from.remove_source(to_id, &to);
+                    from.remove_source(to_id, to);
                 }
                 _ => {}
             }
@@ -213,13 +213,13 @@ impl EntityPropMutator for EntityProperty {
                 &mut to.properties.attributes,
             ) {
                 (Attributes::DerivedFeature(from), Attributes::AnchorFeature(to)) => {
-                    from.remove_input_anchor_feature(to_id, &to);
+                    from.remove_input_anchor_feature(to_id, to);
                 }
                 (Attributes::DerivedFeature(from), Attributes::DerivedFeature(to)) => {
-                    from.remove_input_derived_feature(to_id, &to);
+                    from.remove_input_derived_feature(to_id, to);
                 }
                 (Attributes::Anchor(from), Attributes::Source(to)) => {
-                    from.reset_source(to_id, &to);
+                    from.reset_source(to_id, to);
                 }
                 _ => {}
             }
@@ -227,68 +227,68 @@ impl EntityPropMutator for EntityProperty {
     }
 }
 
-impl Into<Entity<EntityProperty>> for EntityProperty {
-    fn into(self) -> Entity<EntityProperty> {
-        match &self.attributes {
+impl From<EntityProperty> for Entity<EntityProperty> {
+    fn from(v: EntityProperty) -> Self {
+        match &v.attributes {
             Attributes::AnchorFeature(AnchorFeatureAttributes {
                 name,
                 qualified_name,
                 ..
             }) => Entity::<EntityProperty> {
-                id: self.guid,
+                id: v.guid,
                 entity_type: EntityType::AnchorFeature,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
                 containers: Default::default(),
-                properties: self,
+                properties: v,
             },
             Attributes::DerivedFeature(DerivedFeatureAttributes {
                 name,
                 qualified_name,
                 ..
             }) => Entity::<EntityProperty> {
-                id: self.guid,
+                id: v.guid,
                 entity_type: EntityType::DerivedFeature,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
                 containers: Default::default(),
-                properties: self,
+                properties: v,
             },
             Attributes::Anchor(AnchorAttributes {
                 name,
                 qualified_name,
                 ..
             }) => Entity::<EntityProperty> {
-                id: self.guid,
+                id: v.guid,
                 entity_type: EntityType::Anchor,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
                 containers: Default::default(),
-                properties: self,
+                properties: v,
             },
             Attributes::Source(SourceAttributes {
                 name,
                 qualified_name,
                 ..
             }) => Entity::<EntityProperty> {
-                id: self.guid,
+                id: v.guid,
                 entity_type: EntityType::Source,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
                 containers: Default::default(),
-                properties: self,
+                properties: v,
             },
             Attributes::Project(ProjectAttributes {
                 name,
                 qualified_name,
                 ..
             }) => Entity::<EntityProperty> {
-                id: self.guid,
+                id: v.guid,
                 entity_type: EntityType::Project,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
                 containers: Default::default(),
-                properties: self,
+                properties: v,
             },
         }
     }

@@ -99,7 +99,7 @@ impl ToDocString for EntityProperty {
             self.display_text.to_owned(),
             self.attributes.to_doc_string(),
         ];
-        v.extend(self.labels.to_owned().into_iter());
+        v.extend(self.labels.iter().cloned());
         v.join("\n")
     }
 }
@@ -108,5 +108,5 @@ impl ToDocString for EntityProperty {
  * Keep both original string and processed string
  */
 fn process_name(s: &str) -> String {
-    format!("{}\n{}", s, s.replace("_", " "))
+    format!("{}\n{}", s, s.replace('_', " "))
 }

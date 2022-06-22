@@ -22,9 +22,9 @@ use openraft::RaftNetworkFactory;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::MANAGEMENT_CODE_HEADER_NAME;
 use crate::RegistryNodeId;
 use crate::RegistryTypeConfig;
+use crate::MANAGEMENT_CODE_HEADER_NAME;
 
 pub struct RegistryNetwork {
     pub clients: Arc<HashMap<String, reqwest::Client>>,
@@ -57,16 +57,16 @@ impl RegistryNetwork {
 
         let clients = Arc::get_mut(&mut self.clients).unwrap();
 
-        let client = clients.entry(url.clone()).or_insert(reqwest::Client::new());
+        let client = clients
+            .entry(url.clone())
+            .or_insert_with(reqwest::Client::new);
 
         trace!("send_rpc: url is `{}`", url);
         let resp = client
             .post(url)
-            .apply(|r| {
-                match &self.config.management_code {
-                    Some(c) => r.header(MANAGEMENT_CODE_HEADER_NAME, c),
-                    None => r,
-                }
+            .apply(|r| match &self.config.management_code {
+                Some(c) => r.header(MANAGEMENT_CODE_HEADER_NAME, c),
+                None => r,
             })
             .json(&req)
             .send()

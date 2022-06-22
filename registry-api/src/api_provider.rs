@@ -358,11 +358,10 @@ where
             let scope_id = get_id(t, id_or_name).await?;
 
             if keyword.is_blank() {
-                t.get_children(scope_id, types).await.into()
+                t.get_children(scope_id, types).await
             } else {
                 search_entities(t, keyword, size, offset, types, Some(scope_id))
                     .await
-                    .into()
             }
         }
 

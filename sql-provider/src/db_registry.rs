@@ -176,7 +176,8 @@ where
 #[allow(dead_code)]
 impl<EntityProp, EdgeProp> Registry<EntityProp, EdgeProp>
 where
-    EntityProp: Clone + Debug + PartialEq + Eq + ContentEq + EntityPropMutator + ToDocString + Send + Sync,
+    EntityProp:
+        Clone + Debug + PartialEq + Eq + ContentEq + EntityPropMutator + ToDocString + Send + Sync,
     EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     pub(crate) fn new() -> Self {
@@ -285,12 +286,11 @@ where
     }
 
     pub(crate) fn has_connection_type(&self, from: Uuid, to: Uuid, edge_type: EdgeType) -> bool {
-        if let Some(from) = self.get_idx(from).ok() {
-            if let Some(to) = self.get_idx(to).ok() {
+        if let Ok(from) = self.get_idx(from) {
+            if let Ok(to) = self.get_idx(to) {
                 self.graph
                     .edges_connecting(from, to)
-                    .find(|e| e.weight().edge_type == edge_type)
-                    .is_some()
+                    .any(|e| e.weight().edge_type == edge_type)
             } else {
                 false
             }
@@ -366,7 +366,7 @@ where
     {
         self.graph
             .node_weights()
-            .filter(|w| predicate(&w))
+            .filter(|w| predicate(w))
             .map(|w| w.to_owned())
             .collect()
     }
@@ -375,16 +375,14 @@ where
         self.node_id_map
             .get(&uuid)
             .filter(|_| !self.deleted.contains(&uuid))
-            .map(|&i| self.graph.node_weight(i))
-            .flatten()
+            .and_then(|&i| self.graph.node_weight(i))
             .map(|w| w.to_owned())
     }
 
     pub(crate) fn get_entity_by_name(&self, qualified_name: &str) -> Option<Entity<EntityProp>> {
         self.name_id_map
             .get(qualified_name)
-            .map(|&id| self.get_entity_by_id(id))
-            .flatten()
+            .and_then(|&id| self.get_entity_by_id(id))
     }
 
     pub(crate) fn get_feature_upstream(
@@ -480,10 +478,12 @@ where
         T2: ToString,
     {
         if self.name_id_map.contains_key(&qualified_name.to_string()) {
-            let e = self.get_entity_by_qualified_name(&qualified_name.to_string()).await?;
+            let e = self
+                .get_entity_by_qualified_name(&qualified_name.to_string())
+                .await?;
             if e.properties.content_eq(&properties) {
                 // Creating an exactly same entity, just return existing id without reporting error
-                return Ok(e.id)
+                return Ok(e.id);
             }
             return Err(RegistryError::EntityNameExists(qualified_name.to_string()));
         }
@@ -521,10 +521,12 @@ where
             return Err(RegistryError::EntityIdExists(uuid));
         }
         if self.name_id_map.contains_key(&qualified_name.to_string()) {
-            let e = self.get_entity_by_qualified_name(&qualified_name.to_string()).await?;
-            if e.properties.content_eq(&properties)  {
+            let e = self
+                .get_entity_by_qualified_name(&qualified_name.to_string())
+                .await?;
+            if e.properties.content_eq(&properties) {
                 // Creating an exactly same entity, just return existing id without reporting error
-                return Ok(e.id)
+                return Ok(e.id);
             }
             return Err(RegistryError::EntityNameExists(qualified_name.to_string()));
         }
@@ -545,8 +547,7 @@ where
         if self
             .graph
             .edges_directed(self.get_idx(uuid)?, Direction::Outgoing)
-            .find(|e| e.weight().edge_type.is_downstream())
-            .is_some()
+            .any(|e| e.weight().edge_type.is_downstream())
         {
             // Check if there is anything depends on this entity
             Err(RegistryError::DeleteInUsed(uuid))
@@ -576,12 +577,12 @@ where
                 let from_id = from.id;
                 let to_id = to.id;
                 EntityProp::disconnect(&mut from, from_id, &mut to, to_id, et);
-                self.graph
-                    .node_weight_mut(from_idx)
-                    .map(|w| w.properties = from.properties);
-                self.graph
-                    .node_weight_mut(to_idx)
-                    .map(|w| w.properties = to.properties);
+                if let Some(w) = self.graph.node_weight_mut(from_idx) {
+                    w.properties = from.properties
+                }
+                if let Some(w) = self.graph.node_weight_mut(to_idx) {
+                    w.properties = to.properties
+                }
             }
             // Call external_storage#remove_entity
             if let Some(w) = self.graph.node_weight(idx) {
@@ -659,7 +660,7 @@ where
         Ok(self
             .node_id_map
             .get(&uuid)
-            .ok_or_else(|| RegistryError::InvalidEntity(uuid))?
+            .ok_or(RegistryError::InvalidEntity(uuid))?
             .to_owned())
     }
 
@@ -731,24 +732,23 @@ where
         let mut from = self.graph.node_weight(from_idx).unwrap().to_owned();
         let mut to = self.graph.node_weight(to_idx).unwrap().to_owned();
         EntityProp::connect(&mut from, from_uuid, &mut to, to_uuid, edge_type);
-        self.graph
-            .node_weight_mut(from_idx)
-            .map(|w| w.properties = from.properties);
-        self.graph
-            .node_weight_mut(to_idx)
-            .map(|w| w.properties = to.properties);
+        if let Some(w) = self.graph.node_weight_mut(from_idx) {
+            w.properties = from.properties
+        }
+        if let Some(w) = self.graph.node_weight_mut(to_idx) {
+            w.properties = to.properties
+        }
 
-        let idx = self.graph.add_edge(
+        self.graph.add_edge(
             from_idx,
             to_idx,
             Edge {
                 from: from_uuid,
                 to: to_uuid,
                 edge_type,
-                properties: properties.clone(),
+                properties,
             },
-        );
-        idx
+        )
     }
 }
 

@@ -100,7 +100,7 @@ where
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["graph", "deleted"];
+        const FIELDS: &[&str] = &["graph", "deleted"];
         deserializer.deserialize_struct(
             "Registry",
             FIELDS,
@@ -124,7 +124,7 @@ where
 
     fn load_snapshot(&mut self, data: &'de [u8]) -> Result<(), registry_provider::RegistryError> {
         // TODO: unwrap
-        *self = serde_json::from_slice::<'de, Self>(&data).unwrap();
+        *self = serde_json::from_slice::<'de, Self>(data).unwrap();
         Ok(())
     }
 }

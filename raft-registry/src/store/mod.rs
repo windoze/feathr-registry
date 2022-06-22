@@ -518,13 +518,13 @@ impl RaftStorage<RegistryTypeConfig> for Arc<RegistryStore> {
                 let meta = SnapshotMeta {
                     last_log_id: last_applied_log,
                     last_membership: self.state_machine.read().await.last_membership.clone(),
-                    snapshot_id: snapshot_id,
+                    snapshot_id,
                 };
 
                 tracing::debug!("get_current_snapshot: meta {:?}", meta);
 
                 Ok(Some(Snapshot {
-                    meta: meta,
+                    meta,
                     snapshot: Box::new(Cursor::new(data)),
                 }))
             }

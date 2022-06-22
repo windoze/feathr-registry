@@ -83,47 +83,44 @@ impl RegistryStore {
             .filter(|e| !e.file_type().is_dir())
         {
             let f_name = String::from(entry.file_name().to_string_lossy());
-            let mut s1 = f_name.split(".");
+            let mut s1 = f_name.split('.');
             let file = s1.next();
             let ext = s1.next();
-            match ext.unwrap() {
-                "bin" => {
-                    tracing::trace!("file: {:?}", file);
-                    let mut s3 = file.unwrap().split("+");
-                    let prefix = s3.next();
+            if ext.unwrap() == "bin" {
+                tracing::trace!("file: {:?}", file);
+                let mut s3 = file.unwrap().split('+');
+                let prefix = s3.next();
 
-                    match prefix {
-                        Some(p) => {
-                            if p != self.config.instance_prefix {
-                                continue;
-                            }
+                match prefix {
+                    Some(p) => {
+                        if p != self.config.instance_prefix {
+                            continue;
                         }
-                        None => continue,
                     }
-                    let node_id = s3.next().unwrap();
-                    if node_id != self.node_id.to_string() {
-                        tracing::trace!("Skipping unknown snapshot file '{}'", f_name);
-                        continue;
-                    };
-                    let snapshot_id = s3.next().unwrap();
-
-                    let mut s2 = snapshot_id.split("-");
-                    //TODO:
-                    let _term_id = s2.next();
-                    let _node_id = s2.next();
-                    let index = s2.next();
-                    let _snapshot_id = s2.next();
-
-                    let index = u64::from_str_radix(index.unwrap(), 10).unwrap();
-                    if index > max_index {
-                        max_index = index;
-                        latest_snapshot_file = f_name;
-                    }
+                    None => continue,
                 }
-                _ => (),
+                let node_id = s3.next().unwrap();
+                if node_id != self.node_id.to_string() {
+                    tracing::trace!("Skipping unknown snapshot file '{}'", f_name);
+                    continue;
+                };
+                let snapshot_id = s3.next().unwrap();
+
+                let mut s2 = snapshot_id.split('-');
+                //TODO:
+                let _term_id = s2.next();
+                let _node_id = s2.next();
+                let index = s2.next();
+                let _snapshot_id = s2.next();
+
+                let index = index.unwrap().parse().unwrap();
+                if index > max_index {
+                    max_index = index;
+                    latest_snapshot_file = f_name;
+                }
             }
         }
-        if latest_snapshot_file.len() > 0 {
+        if !latest_snapshot_file.is_empty() {
             Ok(format!(
                 "{}/{}",
                 self.config.snapshot_path, latest_snapshot_file

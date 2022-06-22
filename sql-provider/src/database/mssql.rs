@@ -42,7 +42,7 @@ impl<'a> FromSql<'a> for EntityPropertyWrapper {
             tiberius::ColumnData::String(s) => s
                 .to_owned()
                 .map(|s| serde_json::from_str::<EntityProperty>(&s).log().ok())
-                .map(|e| e.map(|e| EntityPropertyWrapper(e)))
+                .map(|e| e.map(EntityPropertyWrapper))
                 .ok_or_else(|| tiberius::error::Error::Conversion("".into())),
             _ => Err(tiberius::error::Error::Conversion("".into())),
         }

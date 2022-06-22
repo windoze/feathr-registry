@@ -22,10 +22,7 @@ pub enum EntityType {
 
 impl EntityType {
     pub fn is_entry_point(self) -> bool {
-        match self {
-            EntityType::Project => true,
-            _ => false,
-        }
+        matches!(self, EntityType::Project)
     }
 }
 
@@ -224,7 +221,7 @@ where
             }
         }
 
-        const FIELDS: &'static [&'static str] = &[
+        const FIELDS: &[&str] = &[
             "id",
             "entity_type",
             "name",

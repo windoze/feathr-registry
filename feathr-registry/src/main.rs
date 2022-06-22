@@ -144,7 +144,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .await
     };
 
-    let api_base = format!("/{}", options.api_base.trim_start_matches("/"));
+    let api_base = format!("/{}", options.api_base.trim_start_matches('/'));
     let http_addr = ext_http_addr
         .trim_start_matches("http://")
         .trim_start_matches("https://")
@@ -174,7 +174,7 @@ async fn main() -> Result<(), anyhow::Error> {
             spa_endpoint::SpaEndpoint::new("./static-files", "index.html"),
         )
         .data(app.clone());
-    let mut tasks: Vec<Pin<Box<dyn Future<Output = ()>>>> = vec![];
+    let mut tasks: Vec<Pin<Box<dyn Future<Output = anyhow::Result<()>>>>> = vec![];
     let svc_task = async {
         Server::new(TcpListener::bind(
             options.http_addr.trim_start_matches("http://"),
@@ -182,7 +182,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .run(route)
         .await
         .log()
-        .ok();
+        .map_err(anyhow::Error::from)
     };
     tasks.push(Box::pin(svc_task));
     let raft_task = async {
@@ -190,19 +190,23 @@ async fn main() -> Result<(), anyhow::Error> {
             debug!("Joining cluster");
             app.join_or_init(&options.seeds, !options.no_init)
                 .await
-                .ok();
+                .log()?
         }
 
         if options.load_db {
             debug!("Loading data from db");
-            app.load_data().await.log().ok();
+            app.load_data().await.log()?;
         }
         if options.write_db {
             // This is a writer node
             attach_storage(&mut app.store.state_machine.write().await.registry);
         }
+        Ok(())
     };
     tasks.push(Box::pin(raft_task));
-    join_all(tasks.into_iter()).await;
+    join_all(tasks.into_iter())
+        .await
+        .into_iter()
+        .collect::<anyhow::Result<Vec<_>>>()?;
     Ok(())
 }

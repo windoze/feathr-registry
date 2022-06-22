@@ -47,28 +47,75 @@ impl EdgeType {
     }
 
     pub fn validate(&self, from: EntityType, to: EntityType) -> bool {
-        match (from, to, self) {
+        matches!(
+            (from, to, self),
             (EntityType::Project, EntityType::Source, EdgeType::Contains)
-            | (EntityType::Project, EntityType::Anchor, EdgeType::Contains)
-            | (EntityType::Project, EntityType::AnchorFeature, EdgeType::Contains)
-            | (EntityType::Project, EntityType::DerivedFeature, EdgeType::Contains)
-            | (EntityType::Source, EntityType::Project, EdgeType::BelongsTo)
-            | (EntityType::Source, EntityType::Anchor, EdgeType::Produces)
-            | (EntityType::Source, EntityType::AnchorFeature, EdgeType::Produces)
-            | (EntityType::Anchor, EntityType::Project, EdgeType::BelongsTo)
-            | (EntityType::Anchor, EntityType::Source, EdgeType::Consumes)
-            | (EntityType::Anchor, EntityType::AnchorFeature, EdgeType::Contains)
-            | (EntityType::AnchorFeature, EntityType::Project, EdgeType::BelongsTo)
-            | (EntityType::AnchorFeature, EntityType::Source, EdgeType::Consumes)
-            | (EntityType::AnchorFeature, EntityType::Anchor, EdgeType::BelongsTo)
-            | (EntityType::AnchorFeature, EntityType::DerivedFeature, EdgeType::Produces)
-            | (EntityType::DerivedFeature, EntityType::Project, EdgeType::BelongsTo)
-            | (EntityType::DerivedFeature, EntityType::AnchorFeature, EdgeType::Consumes)
-            | (EntityType::DerivedFeature, EntityType::DerivedFeature, EdgeType::Produces) => true,
-            (EntityType::DerivedFeature, EntityType::DerivedFeature, EdgeType::Consumes) => true,
-
-            _ => return false,
-        }
+                | (EntityType::Project, EntityType::Anchor, EdgeType::Contains)
+                | (
+                    EntityType::Project,
+                    EntityType::AnchorFeature,
+                    EdgeType::Contains
+                )
+                | (
+                    EntityType::Project,
+                    EntityType::DerivedFeature,
+                    EdgeType::Contains
+                )
+                | (EntityType::Source, EntityType::Project, EdgeType::BelongsTo)
+                | (EntityType::Source, EntityType::Anchor, EdgeType::Produces)
+                | (
+                    EntityType::Source,
+                    EntityType::AnchorFeature,
+                    EdgeType::Produces
+                )
+                | (EntityType::Anchor, EntityType::Project, EdgeType::BelongsTo)
+                | (EntityType::Anchor, EntityType::Source, EdgeType::Consumes)
+                | (
+                    EntityType::Anchor,
+                    EntityType::AnchorFeature,
+                    EdgeType::Contains
+                )
+                | (
+                    EntityType::AnchorFeature,
+                    EntityType::Project,
+                    EdgeType::BelongsTo
+                )
+                | (
+                    EntityType::AnchorFeature,
+                    EntityType::Source,
+                    EdgeType::Consumes
+                )
+                | (
+                    EntityType::AnchorFeature,
+                    EntityType::Anchor,
+                    EdgeType::BelongsTo
+                )
+                | (
+                    EntityType::AnchorFeature,
+                    EntityType::DerivedFeature,
+                    EdgeType::Produces
+                )
+                | (
+                    EntityType::DerivedFeature,
+                    EntityType::Project,
+                    EdgeType::BelongsTo
+                )
+                | (
+                    EntityType::DerivedFeature,
+                    EntityType::AnchorFeature,
+                    EdgeType::Consumes
+                )
+                | (
+                    EntityType::DerivedFeature,
+                    EntityType::DerivedFeature,
+                    EdgeType::Produces
+                )
+                | (
+                    EntityType::DerivedFeature,
+                    EntityType::DerivedFeature,
+                    EdgeType::Consumes
+                )
+        )
     }
 }
 
@@ -238,7 +285,7 @@ where
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["from", "to", "edge_type", "properties"];
+        const FIELDS: &[&str] = &["from", "to", "edge_type", "properties"];
         deserializer.deserialize_struct("Edge", FIELDS, EdgeVisitor::<Prop> { _t: PhantomData })
     }
 }

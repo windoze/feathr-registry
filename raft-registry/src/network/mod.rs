@@ -36,8 +36,7 @@ impl Header for ManagementCode {
     fn decode<'i, I: Iterator<Item = &'i HeaderValue>>(values: &mut I) -> Result<Self, Error> {
         let v = values
             .next()
-            .cloned()
-            .and_then(|val| Some(String::from_utf8_lossy(val.as_bytes()).to_string()))
+            .map(|val| String::from_utf8_lossy(val.as_bytes()).to_string())
             .ok_or_else(Error::invalid)?;
         Ok(Self(v))
     }
