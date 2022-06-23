@@ -1,9 +1,13 @@
-mod api;
+mod sequencer;
+mod api_v2;
+mod api_v1;
 mod management;
 mod raft;
 mod raft_network_impl;
 
-pub use api::{FeathrApi, RaftSequencer};
+pub use sequencer::RaftSequencer;
+pub use api_v1::FeathrApiV1;
+pub use api_v2::FeathrApiV2;
 pub use management::management_routes;
 use poem::{
     http::HeaderValue,

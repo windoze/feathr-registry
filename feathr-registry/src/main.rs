@@ -17,7 +17,7 @@ use poem::{
 };
 use poem_openapi::OpenApiService;
 use raft_registry::{
-    management_routes, raft_routes, FeathrApi, NodeConfig, RaftRegistryApp, RaftSequencer,
+    management_routes, raft_routes, FeathrApiV2, NodeConfig, RaftRegistryApp, RaftSequencer, FeathrApiV1,
 };
 use sql_provider::attach_storage;
 
@@ -150,31 +150,48 @@ async fn main() -> Result<(), anyhow::Error> {
         .trim_start_matches("https://")
         .to_string();
 
-    let api_service = OpenApiService::new(
-        FeathrApi,
-        "Feathr Registry API",
+    let api_service_v1 = OpenApiService::new(
+        FeathrApiV1,
+        "Feathr Registry API Version 1",
         option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>"),
     )
-    .server(&format!("http://{}{}", http_addr, api_base,));
-    let ui = api_service.swagger_ui();
-    let spec = api_service.spec();
+    .server(&format!("http://{}{}/v1", http_addr, api_base,));
+    let ui_v1 = api_service_v1.swagger_ui();
+    let spec_v1 = api_service_v1.spec();
+
+    let api_service_v2 = OpenApiService::new(
+        FeathrApiV2,
+        "Feathr Registry API Version 2",
+        option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>"),
+    )
+    .server(&format!("http://{}{}/v2", http_addr, api_base,));
+    let ui_v2 = api_service_v2.swagger_ui();
+    let spec_v2 = api_service_v2.spec();
 
     let route = management_routes(raft_routes(Route::new()))
         .nest(
-            api_base,
-            api_service
+            format!("{}/v1", api_base),
+            api_service_v1
                 .with(Tracing)
                 .with(RaftSequencer::new(app.store.clone()))
                 .with(Cors::new()),
         )
-        .nest("/docs", ui)
-        .at("/spec", poem::endpoint::make_sync(move |_| spec.clone()))
+        .nest("/v1/docs", ui_v1)
+        .at("/v1/spec", poem::endpoint::make_sync(move |_| spec_v1.clone()))
+        .nest(
+            format!("{}/v2", api_base),
+            api_service_v2
+                .with(Tracing)
+                .with(RaftSequencer::new(app.store.clone()))
+                .with(Cors::new()),
+        )
+        .nest("/v2/docs", ui_v2)
+        .at("/v2/spec", poem::endpoint::make_sync(move |_| spec_v2.clone()))
         .nest(
             "/",
             spa_endpoint::SpaEndpoint::new("./static-files", "index.html"),
         )
         .data(app.clone());
-    let mut tasks: Vec<Pin<Box<dyn Future<Output = anyhow::Result<()>>>>> = vec![];
     let svc_task = async {
         Server::new(TcpListener::bind(
             options.http_addr.trim_start_matches("http://"),
@@ -184,7 +201,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .log()
         .map_err(anyhow::Error::from)
     };
-    tasks.push(Box::pin(svc_task));
     let raft_task = async {
         if !options.seeds.is_empty() {
             debug!("Joining cluster");
@@ -203,7 +219,7 @@ async fn main() -> Result<(), anyhow::Error> {
         }
         Ok(())
     };
-    tasks.push(Box::pin(raft_task));
+    let tasks: Vec<Pin<Box<dyn Future<Output = anyhow::Result<()>>>>> = vec![Box::pin(svc_task), Box::pin(raft_task)];
     join_all(tasks.into_iter())
         .await
         .into_iter()

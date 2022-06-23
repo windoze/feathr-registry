@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
-use async_trait::async_trait;
-use poem::{web::Data, Endpoint, IntoResponse, Middleware, Request, Response};
+use poem::web::Data;
 use poem_openapi::{
     param::{Header, Path, Query},
     payload::Json,
@@ -13,7 +10,7 @@ use registry_api::{
 };
 use uuid::Uuid;
 
-use crate::{RaftRegistryApp, RegistryStore, OPT_SEQ_HEADER_NAME};
+use crate::RaftRegistryApp;
 
 #[derive(Tags)]
 enum ApiTags {
@@ -24,64 +21,10 @@ enum ApiTags {
     DerivedFeature,
     Feature,
 }
-
-pub struct RaftSequencer {
-    store: Arc<RegistryStore>,
-}
-
-impl RaftSequencer {
-    pub fn new(store: Arc<RegistryStore>) -> Self {
-        Self { store }
-    }
-}
-
-impl<E: Endpoint> Middleware<E> for RaftSequencer {
-    type Output = RaftSequencerImpl<E>;
-
-    fn transform(&self, ep: E) -> Self::Output {
-        RaftSequencerImpl {
-            ep,
-            store: self.store.clone(),
-        }
-    }
-}
-
-pub struct RaftSequencerImpl<E> {
-    ep: E,
-    store: Arc<RegistryStore>,
-}
-
-#[async_trait]
-impl<E: Endpoint> Endpoint for RaftSequencerImpl<E> {
-    type Output = Response;
-
-    async fn call(&self, req: Request) -> poem::Result<Self::Output> {
-        let res = self.ep.call(req).await;
-        let opt_seq = self
-            .store
-            .state_machine
-            .read()
-            .await
-            .last_applied_log
-            .map(|l| l.index);
-
-        match res {
-            Ok(resp) => {
-                let resp = match opt_seq {
-                    Some(v) => resp.with_header(OPT_SEQ_HEADER_NAME, v).into_response(),
-                    None => resp.into_response(),
-                };
-                Ok(resp)
-            }
-            Err(err) => Err(err),
-        }
-    }
-}
-
-pub struct FeathrApi;
+pub struct FeathrApiV1;
 
 #[OpenApi]
-impl FeathrApi {
+impl FeathrApiV1 {
     #[oai(path = "/projects", method = "get", tag = "ApiTags::Project")]
     async fn get_projects(
         &self,
@@ -125,27 +68,8 @@ impl FeathrApi {
             .map(|v| Json(v.into()))
     }
 
-    #[oai(path = "/projects/:project", method = "get", tag = "ApiTags::Project")]
-    async fn get_project(
-        &self,
-        data: Data<&RaftRegistryApp>,
-        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
-        project: Path<String>,
-    ) -> poem::Result<Json<Entity>> {
-        data.0
-            .request(
-                opt_seq.0,
-                FeathrApiRequest::GetProject {
-                    id_or_name: project.0,
-                },
-            )
-            .await
-            .into_entity()
-            .map(Json)
-    }
-
     #[oai(
-        path = "/projects/:project/lineage",
+        path = "/projects/:project",
         method = "get",
         tag = "ApiTags::Project"
     )]
@@ -180,7 +104,7 @@ impl FeathrApi {
         keyword: Query<Option<String>>,
         size: Query<Option<usize>>,
         offset: Query<Option<usize>>,
-    ) -> poem::Result<Json<Entities>> {
+    ) -> poem::Result<Json<Vec<Entity>>> {
         data.0
             .request(
                 opt_seq.0,
@@ -193,6 +117,7 @@ impl FeathrApi {
             )
             .await
             .into_entities()
+            .map(|es| es.entities)
             .map(Json)
     }
 
@@ -201,7 +126,7 @@ impl FeathrApi {
         method = "get",
         tag = "ApiTags::DataSource"
     )]
-    async fn get_datasources(
+    async fn get_project_datasources(
         &self,
         data: Data<&RaftRegistryApp>,
         #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
@@ -209,7 +134,7 @@ impl FeathrApi {
         keyword: Query<Option<String>>,
         size: Query<Option<usize>>,
         offset: Query<Option<usize>>,
-    ) -> poem::Result<Json<Entities>> {
+    ) -> poem::Result<Json<Vec<Entity>>> {
         data.0
             .request(
                 opt_seq.0,
@@ -222,6 +147,7 @@ impl FeathrApi {
             )
             .await
             .into_entities()
+            .map(|es| es.entities)
             .map(Json)
     }
 
@@ -251,60 +177,6 @@ impl FeathrApi {
             .await
             .into_uuid()
             .map(|v| Json(v.into()))
-    }
-
-    #[oai(
-        path = "/projects/:project/datasources/:source",
-        method = "get",
-        tag = "ApiTags::DataSource"
-    )]
-    async fn get_datasource(
-        &self,
-        data: Data<&RaftRegistryApp>,
-        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
-        project: Path<String>,
-        source: Path<String>,
-    ) -> poem::Result<Json<Entity>> {
-        data.0
-            .request(
-                opt_seq.0,
-                FeathrApiRequest::GetProjectDataSource {
-                    project_id_or_name: project.0,
-                    id_or_name: source.0,
-                },
-            )
-            .await
-            .into_entity()
-            .map(Json)
-    }
-
-    #[oai(
-        path = "/projects/:project/derivedfeatures",
-        method = "get",
-        tag = "ApiTags::DerivedFeature"
-    )]
-    async fn get_project_derived_features(
-        &self,
-        data: Data<&RaftRegistryApp>,
-        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
-        project: Path<String>,
-        keyword: Query<Option<String>>,
-        size: Query<Option<usize>>,
-        offset: Query<Option<usize>>,
-    ) -> poem::Result<Json<Entities>> {
-        data.0
-            .request(
-                opt_seq.0,
-                FeathrApiRequest::GetProjectDerivedFeatures {
-                    project_id_or_name: project.0,
-                    keyword: keyword.0,
-                    size: size.0,
-                    offset: offset.0,
-                },
-            )
-            .await
-            .into_entities()
-            .map(Json)
     }
 
     #[oai(
@@ -348,7 +220,7 @@ impl FeathrApi {
         keyword: Query<Option<String>>,
         size: Query<Option<usize>>,
         offset: Query<Option<usize>>,
-    ) -> poem::Result<Json<Entities>> {
+    ) -> poem::Result<Json<Vec<Entity>>> {
         data.0
             .request(
                 opt_seq.0,
@@ -361,6 +233,7 @@ impl FeathrApi {
             )
             .await
             .into_entities()
+            .map(|es| es.entities)
             .map(Json)
     }
 
@@ -390,62 +263,6 @@ impl FeathrApi {
             .await
             .into_uuid()
             .map(|v| Json(v.into()))
-    }
-
-    #[oai(
-        path = "/projects/:project/anchors/:anchor",
-        method = "get",
-        tag = "ApiTags::Anchor"
-    )]
-    async fn get_anchor(
-        &self,
-        data: Data<&RaftRegistryApp>,
-        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
-        project: Path<String>,
-        anchor: Path<String>,
-    ) -> poem::Result<Json<Entity>> {
-        data.0
-            .request(
-                opt_seq.0,
-                FeathrApiRequest::GetProjectAnchor {
-                    project_id_or_name: project.0,
-                    id_or_name: anchor.0,
-                },
-            )
-            .await
-            .into_entity()
-            .map(Json)
-    }
-
-    #[oai(
-        path = "/projects/:project/anchors/:anchor/features",
-        method = "get",
-        tag = "ApiTags::AnchorFeature"
-    )]
-    async fn get_anchor_features(
-        &self,
-        data: Data<&RaftRegistryApp>,
-        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
-        project: Path<String>,
-        anchor: Path<String>,
-        keyword: Query<Option<String>>,
-        size: Query<Option<usize>>,
-        offset: Query<Option<usize>>,
-    ) -> poem::Result<Json<Entities>> {
-        data.0
-            .request(
-                opt_seq.0,
-                FeathrApiRequest::GetAnchorFeatures {
-                    project_id_or_name: project.0,
-                    anchor_id_or_name: anchor.0,
-                    keyword: keyword.0,
-                    size: size.0,
-                    offset: offset.0,
-                },
-            )
-            .await
-            .into_entities()
-            .map(Json)
     }
 
     #[oai(
@@ -498,7 +315,7 @@ impl FeathrApi {
     }
 
     #[oai(
-        path = "/features/:feature/lineage",
+        path = "/features/lineage/:feature",
         method = "get",
         tag = "ApiTags::Feature"
     )]
