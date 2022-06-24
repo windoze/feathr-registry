@@ -7,23 +7,10 @@ use tantivy::{
     doc,
     query::{BooleanQuery, Query, QueryParser, TermQuery},
     schema::{Field, IndexRecordOption, Schema, TextFieldIndexing, STRING, TEXT},
-    tokenizer::{PreTokenizedString, Tokenizer, WhitespaceTokenizer},
     Index, IndexReader, IndexWriter, ReloadPolicy, Term,
 };
 use thiserror::Error;
 use uuid::Uuid;
-
-fn pre_tokenize_text(text: &str) -> PreTokenizedString {
-    let mut tokens = vec![];
-    let mut token_stream = WhitespaceTokenizer.token_stream(text);
-    while token_stream.advance() {
-        tokens.push(token_stream.token().clone());
-    }
-    PreTokenizedString {
-        text: text.to_string(),
-        tokens,
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum FtsError {
@@ -66,11 +53,14 @@ impl FtsIndex {
     pub fn new() -> Self {
         let indexing_option = TextFieldIndexing::default()
             .set_tokenizer("en_stem")
-            .set_index_option(IndexRecordOption::Basic);
+            .set_index_option(IndexRecordOption::WithFreqsAndPositions);
         let mut schema_builder = Schema::builder();
         schema_builder.add_text_field("name", TEXT.set_indexing_options(indexing_option.clone()));
         schema_builder.add_text_field("id", STRING.set_stored());
-        schema_builder.add_text_field("scopes", TEXT);
+        schema_builder.add_text_field(
+            "scopes",
+            TEXT.set_indexing_options(indexing_option.clone().set_tokenizer("whitespace")),
+        );
         schema_builder.add_text_field("type", STRING);
         schema_builder.add_text_field("body", TEXT.set_indexing_options(indexing_option));
         let schema = schema_builder.build();
@@ -107,13 +97,14 @@ impl FtsIndex {
         if self.writer.is_none() {
             self.writer = Some(self.index.writer(30_000_000).unwrap());
         }
-        self.writer.as_ref().unwrap().add_document(doc!(
+        let doc = doc!(
             self.name_field => d.get_name(),
             self.id_field => d.get_id(),
-            self.scopes_field => pre_tokenize_text(&d.get_scopes().join(" ")),
+            self.scopes_field => d.get_scopes().join(" "),
             self.type_field => d.get_type(),
             self.body_field => d.get_body(),
-        ))?;
+        );
+        self.writer.as_ref().unwrap().add_document(doc)?;
         Ok(())
     }
 

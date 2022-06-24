@@ -5,8 +5,8 @@ use poem_openapi::{
     OpenApi, Tags,
 };
 use registry_api::{
-    AnchorDef, AnchorFeatureDef, CreationResponse, DerivedFeatureDef, Entities, Entity,
-    EntityLineage, FeathrApiRequest, ProjectDef, SourceDef,
+    AnchorDef, AnchorFeatureDef, CreationResponse, DerivedFeatureDef, Entity, EntityLineage,
+    FeathrApiRequest, ProjectDef, SourceDef,
 };
 use uuid::Uuid;
 
@@ -31,16 +31,16 @@ impl FeathrApiV1 {
         data: Data<&RaftRegistryApp>,
         #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
         keyword: Query<Option<String>>,
-        size: Query<Option<usize>>,
-        offset: Query<Option<usize>>,
+        page: Query<Option<usize>>,
+        limit: Query<Option<usize>>,
     ) -> poem::Result<Json<Vec<String>>> {
         data.0
             .request(
                 opt_seq.0,
                 FeathrApiRequest::GetProjects {
                     keyword: keyword.0,
-                    size: size.0,
-                    offset: offset.0,
+                    size: limit.0,
+                    offset: page.map(|page| (page - 1) * limit.unwrap_or(10)),
                 },
             )
             .await
@@ -59,20 +59,13 @@ impl FeathrApiV1 {
             definition.id = Uuid::new_v4().to_string();
         }
         data.0
-            .request(
-                None,
-                FeathrApiRequest::CreateProject { definition },
-            )
+            .request(None, FeathrApiRequest::CreateProject { definition })
             .await
             .into_uuid()
             .map(|v| Json(v.into()))
     }
 
-    #[oai(
-        path = "/projects/:project",
-        method = "get",
-        tag = "ApiTags::Project"
-    )]
+    #[oai(path = "/projects/:project", method = "get", tag = "ApiTags::Project")]
     async fn get_project_lineage(
         &self,
         data: Data<&RaftRegistryApp>,
@@ -102,8 +95,8 @@ impl FeathrApiV1 {
         #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
         project: Path<String>,
         keyword: Query<Option<String>>,
-        size: Query<Option<usize>>,
-        offset: Query<Option<usize>>,
+        page: Query<Option<usize>>,
+        limit: Query<Option<usize>>,
     ) -> poem::Result<Json<Vec<Entity>>> {
         data.0
             .request(
@@ -111,8 +104,8 @@ impl FeathrApiV1 {
                 FeathrApiRequest::GetProjectFeatures {
                     project_id_or_name: project.0,
                     keyword: keyword.0,
-                    size: size.0,
-                    offset: offset.0,
+                    size: limit.0,
+                    offset: page.map(|page| (page - 1) * limit.unwrap_or(10)),
                 },
             )
             .await
@@ -132,8 +125,8 @@ impl FeathrApiV1 {
         #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
         project: Path<String>,
         keyword: Query<Option<String>>,
-        size: Query<Option<usize>>,
-        offset: Query<Option<usize>>,
+        page: Query<Option<usize>>,
+        limit: Query<Option<usize>>,
     ) -> poem::Result<Json<Vec<Entity>>> {
         data.0
             .request(
@@ -141,8 +134,8 @@ impl FeathrApiV1 {
                 FeathrApiRequest::GetProjectDataSources {
                     project_id_or_name: project.0,
                     keyword: keyword.0,
-                    size: size.0,
-                    offset: offset.0,
+                    size: limit.0,
+                    offset: page.map(|page| (page - 1) * limit.unwrap_or(10)),
                 },
             )
             .await
@@ -218,8 +211,8 @@ impl FeathrApiV1 {
         #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
         project: Path<String>,
         keyword: Query<Option<String>>,
-        size: Query<Option<usize>>,
-        offset: Query<Option<usize>>,
+        page: Query<Option<usize>>,
+        limit: Query<Option<usize>>,
     ) -> poem::Result<Json<Vec<Entity>>> {
         data.0
             .request(
@@ -227,8 +220,8 @@ impl FeathrApiV1 {
                 FeathrApiRequest::GetProjectAnchors {
                     project_id_or_name: project.0,
                     keyword: keyword.0,
-                    size: size.0,
-                    offset: offset.0,
+                    size: limit.0,
+                    offset: page.map(|page| (page - 1) * limit.unwrap_or(10)),
                 },
             )
             .await

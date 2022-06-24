@@ -1,13 +1,15 @@
-use std::{fmt::Debug, collections::HashSet};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
+use std::{collections::HashSet, fmt::Debug};
 
-use serde::de::{Visitor, SeqAccess, self, MapAccess};
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{ProjectDef, RegistryError, SourceDef, AnchorDef, AnchorFeatureDef, DerivedFeatureDef, EdgeType};
+use crate::{
+    AnchorDef, AnchorFeatureDef, DerivedFeatureDef, EdgeType, ProjectDef, RegistryError, SourceDef,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EntityType {
@@ -80,7 +82,6 @@ where
         entity.serialize_field("entity_type", &self.entity_type)?;
         entity.serialize_field("name", &self.name)?;
         entity.serialize_field("qualified_name", &self.qualified_name)?;
-        entity.serialize_field("containers", &self.containers)?;
         entity.serialize_field("properties", &self.properties)?;
         entity.end()
     }
@@ -101,7 +102,6 @@ where
             EntityType,
             Name,
             QualifiedName,
-            Containers,
             Properties,
         }
         struct EntityVisitor<T> {
@@ -134,18 +134,15 @@ where
                 let qualified_name = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(3, &self))?;
-                let containers = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(4, &self))?;
                 let properties = seq
                     .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(5, &self))?;
+                    .ok_or_else(|| de::Error::invalid_length(4, &self))?;
                 Ok(Entity::<Prop> {
                     id,
                     entity_type,
                     name,
                     qualified_name,
-                    containers,
+                    containers: Default::default(),
                     properties,
                 })
             }
@@ -158,7 +155,6 @@ where
                 let mut entity_type = None;
                 let mut name = None;
                 let mut qualified_name = None;
-                let mut containers = None;
                 let mut properties = None;
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -186,12 +182,6 @@ where
                             }
                             qualified_name = Some(map.next_value()?);
                         }
-                        Field::Containers => {
-                            if containers.is_some() {
-                                return Err(de::Error::duplicate_field("containers"));
-                            }
-                            containers = Some(map.next_value()?);
-                        }
                         Field::Properties => {
                             if properties.is_some() {
                                 return Err(de::Error::duplicate_field("properties"));
@@ -206,8 +196,6 @@ where
                 let name = name.ok_or_else(|| de::Error::missing_field("name"))?;
                 let qualified_name =
                     qualified_name.ok_or_else(|| de::Error::missing_field("qualified_name"))?;
-                let containers =
-                    containers.ok_or_else(|| de::Error::missing_field("containers"))?;
                 let properties =
                     properties.ok_or_else(|| de::Error::missing_field("properties"))?;
                 Ok(Entity::<Prop> {
@@ -215,20 +203,13 @@ where
                     entity_type,
                     name,
                     qualified_name,
-                    containers,
+                    containers: Default::default(),
                     properties,
                 })
             }
         }
 
-        const FIELDS: &[&str] = &[
-            "id",
-            "entity_type",
-            "name",
-            "qualified_name",
-            "containers",
-            "properties",
-        ];
+        const FIELDS: &[&str] = &["id", "entity_type", "name", "qualified_name", "properties"];
         deserializer.deserialize_struct("Entity", FIELDS, EntityVisitor::<Prop> { _t: PhantomData })
     }
 }
@@ -241,8 +222,7 @@ where
     fn new_source(definition: &SourceDef) -> Result<Self, RegistryError>;
     fn new_anchor(definition: &AnchorDef) -> Result<Self, RegistryError>;
     fn new_anchor_feature(definition: &AnchorFeatureDef) -> Result<Self, RegistryError>;
-    fn new_derived_feature(definition: &DerivedFeatureDef)
-        -> Result<Self, RegistryError>;
+    fn new_derived_feature(definition: &DerivedFeatureDef) -> Result<Self, RegistryError>;
 
     /**
      * Function will be called when 2 entities are connected.
@@ -268,4 +248,3 @@ where
         edge_type: EdgeType,
     );
 }
-

@@ -201,6 +201,8 @@ where
         NI: Iterator<Item = Entity<EntityProp>>,
         EI: Iterator<Item = Edge<EdgeProp>>,
     {
+        let mut ids: HashSet<Uuid> = Default::default();
+        self.fts_index.enable(false);
         for e in entities {
             // Insert and ignore any error. e.g. duplicated entities
             match self
@@ -214,7 +216,7 @@ where
                 .await
             {
                 Ok(_) => {
-                    self.fts_index.add_doc(&e)?;
+                    ids.insert(e.id);
                 }
                 Err(e) => {
                     debug!("Ignored error '{:?}'", e);
@@ -222,11 +224,21 @@ where
             }
         }
 
-        self.fts_index.commit()?;
-
         edges.for_each(|e| {
             self.connect(e.from, e.to, e.edge_type, e.properties).ok();
         });
+
+        self.fts_index.enable(true);
+        for id in ids {
+            match self.get_entity_by_id(id) {
+                Some(e) => {
+                    self.fts_index.add_doc(&e)?;
+                }
+                None => {}
+            }
+        }
+
+        self.fts_index.commit()?;
 
         Ok(())
     }
@@ -733,9 +745,11 @@ where
         let mut to = self.graph.node_weight(to_idx).unwrap().to_owned();
         EntityProp::connect(&mut from, from_uuid, &mut to, to_uuid, edge_type);
         if let Some(w) = self.graph.node_weight_mut(from_idx) {
+            w.containers = from.containers;
             w.properties = from.properties
         }
         if let Some(w) = self.graph.node_weight_mut(to_idx) {
+            w.containers = to.containers;
             w.properties = to.properties
         }
 
