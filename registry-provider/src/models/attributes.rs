@@ -448,18 +448,24 @@ impl ProjectAttributes {
 pub struct SourceAttributes {
     pub qualified_name: String,
     pub name: String,
-    pub path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub preprocessing: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub event_timestamp_column: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub timestamp_format: Option<String>,
     #[serde(rename = "type")]
     pub type_: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dbtable: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub query: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub auth: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub preprocessing: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub event_timestamp_column: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub timestamp_format: Option<String>,
     #[serde(skip_serializing_if = "is_default", default)]
     pub tags: HashMap<String, String>,
 }

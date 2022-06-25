@@ -187,7 +187,16 @@ impl TryInto<registry_provider::ProjectAttributes> for ProjectAttributes {
 pub struct SourceAttributes {
     pub qualified_name: String,
     pub name: String,
-    pub path: String,
+    #[oai(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[oai(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[oai(skip_serializing_if = "Option::is_none")]
+    pub dbtable: Option<String>,
+    #[oai(skip_serializing_if = "Option::is_none")]
+    pub query: Option<String>,
+    #[oai(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<String>,
     #[oai(skip_serializing_if = "Option::is_none")]
     pub preprocessing: Option<String>,
     #[oai(skip_serializing_if = "Option::is_none")]
@@ -205,6 +214,10 @@ impl From<registry_provider::SourceAttributes> for SourceAttributes {
             qualified_name: v.qualified_name,
             name: v.name,
             path: v.path,
+            url: v.url,
+            dbtable: v.dbtable,
+            query: v.query,
+            auth: v.auth,
             preprocessing: v.preprocessing,
             event_timestamp_column: v.event_timestamp_column,
             timestamp_format: v.timestamp_format,
@@ -222,6 +235,10 @@ impl TryInto<registry_provider::SourceAttributes> for SourceAttributes {
             qualified_name: self.qualified_name,
             name: self.name,
             path: self.path,
+            url: self.url,
+            dbtable: self.dbtable,
+            query: self.query,
+            auth: self.auth,
             preprocessing: self.preprocessing,
             event_timestamp_column: self.event_timestamp_column,
             timestamp_format: self.timestamp_format,
