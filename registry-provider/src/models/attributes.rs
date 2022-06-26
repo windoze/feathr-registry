@@ -6,7 +6,7 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{ANCHOR_FEATURE_TYPE, ANCHOR_TYPE, SOURCE_TYPE, ContentEq};
+use crate::{ContentEq, ANCHOR_FEATURE_TYPE, ANCHOR_TYPE, SOURCE_TYPE};
 
 fn is_default<T>(v: &T) -> bool
 where
@@ -502,6 +502,19 @@ impl Attributes {
                 attr.derived_features.clear();
             }
             _ => {}
+        }
+    }
+}
+
+impl ContentEq for Attributes {
+    fn content_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Attributes::AnchorFeature(a), Attributes::AnchorFeature(b)) => a.content_eq(b),
+            (Attributes::DerivedFeature(a), Attributes::DerivedFeature(b)) => a.content_eq(b),
+            (Attributes::Anchor(a), Attributes::Anchor(b)) => a.content_eq(b),
+            (Attributes::Source(a), Attributes::Source(b)) => a == b,
+            (Attributes::Project(a), Attributes::Project(b)) => a.content_eq(b),
+            _ => false,
         }
     }
 }

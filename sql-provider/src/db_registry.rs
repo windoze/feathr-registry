@@ -709,8 +709,9 @@ where
         entity_type: EntityType,
         name: String,
         qualified_name: String,
-        properties: EntityProp,
+        mut properties: EntityProp,
     ) -> Result<NodeIndex, RegistryError> {
+        properties.clear();
         let entity = Entity {
             id,
             entity_type,

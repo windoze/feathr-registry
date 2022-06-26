@@ -224,6 +224,8 @@ where
     fn new_anchor_feature(definition: &AnchorFeatureDef) -> Result<Self, RegistryError>;
     fn new_derived_feature(definition: &DerivedFeatureDef) -> Result<Self, RegistryError>;
 
+    fn clear(&mut self) {}
+
     /**
      * Function will be called when 2 entities are connected.
      * EntityProp may need to update internal state accordingly.

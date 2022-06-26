@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use crate::{
     AnchorAttributes, AnchorDef, AnchorFeatureAttributes, AnchorFeatureDef, Attributes, ContentEq,
-    DerivedFeatureAttributes, DerivedFeatureDef, EdgeType, Entity, EntityPropMutator, EntityType,
-    ProjectAttributes, ProjectDef, RegistryError, SourceAttributes, SourceDef,
+    DerivedFeatureAttributes, DerivedFeatureDef, EdgeType, Entity, EntityPropMutator, EntityRef,
+    EntityType, ProjectAttributes, ProjectDef, RegistryError, SourceAttributes, SourceDef,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -33,7 +33,7 @@ pub struct EntityProperty {
  */
 impl ContentEq for EntityProperty {
     fn content_eq(&self, other: &Self) -> bool {
-        self.attributes == other.attributes
+        self.attributes.content_eq(&other.attributes)
     }
 }
 
@@ -90,7 +90,11 @@ impl EntityPropMutator for EntityProperty {
                 qualified_name: definition.qualified_name.to_owned(),
                 name: definition.name.to_owned(),
                 features: Default::default(),
-                source: None, // Will be set later by `connect`
+                source: Some(EntityRef {
+                    guid: definition.source_id,
+                    type_name: Default::default(),
+                    unique_attributes: Default::default(),
+                }), // Will be set later by `connect`
                 tags: definition.tags.to_owned(),
             }),
         })
@@ -125,11 +129,29 @@ impl EntityPropMutator for EntityProperty {
                 type_: definition.feature_type.to_owned(),
                 transformation: definition.transformation.to_owned(),
                 key: definition.key.to_owned(),
-                input_anchor_features: Default::default(),
-                input_derived_features: Default::default(),
+                input_anchor_features: definition
+                    .input_anchor_features
+                    .iter()
+                    .map(|id| EntityRef {
+                        guid: id.to_owned(),
+                        ..Default::default()
+                    })
+                    .collect(),
+                input_derived_features: definition
+                    .input_derived_features
+                    .iter()
+                    .map(|id| EntityRef {
+                        guid: id.to_owned(),
+                        ..Default::default()
+                    })
+                    .collect(),
                 tags: definition.tags.to_owned(),
             }),
         })
+    }
+
+    fn clear(&mut self) {
+        self.attributes.clear()
     }
 
     fn connect(
