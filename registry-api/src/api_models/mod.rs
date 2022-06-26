@@ -458,7 +458,15 @@ mod tests {
 
     #[test]
     fn des_source() {
-        let s = r#"{"name":"PASSTHROUGH","type":"PASSTHROUGH","path":"PASSTHROUGH","tags":{}}"#;
+        let s = r#"{
+            "name": "nycTaxiBatchSource",
+            "type": "jdbc",
+            "url": "jdbc:sqlserver://feathrtestsql4.database.windows.net:1433;database=testsql;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30;",
+            "dbtable": "green_tripdata_2020_04",
+            "auth": "USERPASS",
+            "eventTimestampColumn": "lpep_dropoff_datetime",
+            "timestampFormat": "yyyy-MM-dd HH:mm:ss"
+          }"#;
         let src: SourceDef = serde_json::from_str(s).unwrap();
         println!("{:#?}", src);
     }
