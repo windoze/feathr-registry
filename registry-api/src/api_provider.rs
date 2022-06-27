@@ -322,23 +322,14 @@ where
         where
             T: RegistryProvider<EntityProperty, EdgeProperty>,
         {
-            let r = t.search_entity(
+            t.search_entity(
                 &keyword.unwrap_or_default(),
                 types,
                 scope,
                 size.unwrap_or(100),
                 offset.unwrap_or(0),
-            );
-            match r {
-                Ok(entities) => {
-                    let mut es: Vec<Entity> = vec![];
-                    for e in entities {
-                        es.push(fill_entity(t, e))
-                    }
-                    Ok(es)
-                }
-                Err(e) => Err(e),
-            }
+            )
+            .map(|es| es.into_iter().map(|e| fill_entity(t, e)).collect())
         }
 
         fn search_children<T>(
@@ -356,17 +347,8 @@ where
             let scope_id = get_id(t, id_or_name)?;
 
             if keyword.is_blank() {
-                let r = t.get_children(scope_id, types);
-                match r {
-                    Ok(entities) => {
-                        let mut es: Vec<Entity> = vec![];
-                        for e in entities {
-                            es.push(fill_entity(t, e))
-                        }
-                        Ok(es)
-                    }
-                    Err(e) => Err(e),
-                }
+                t.get_children(scope_id, types)
+                    .map(|es| es.into_iter().map(|e| fill_entity(t, e)).collect())
             } else {
                 search_entities(t, keyword, size, offset, types, Some(scope_id))
             }
@@ -522,16 +504,17 @@ where
                 FeathrApiRequest::GetProjectLineage { id_or_name } => {
                     debug!("Project name: {}", id_or_name);
 
-                    match this.get_project(&id_or_name) {
-                        Ok((entities, edges)) => {
-                            let mut es: Vec<Entity> = vec![];
-                            for e in entities {
-                                es.push(fill_entity(this, e))
-                            }
-                            (es, edges).into()
-                        }
-                        Err(e) => e.into(),
-                    }
+                    this.get_project(&id_or_name)
+                        .map(|(entities, edges)| {
+                            (
+                                entities
+                                    .into_iter()
+                                    .map(|e| fill_entity(this, e))
+                                    .collect::<Vec<_>>(),
+                                edges,
+                            )
+                        })
+                        .into()
                 }
                 FeathrApiRequest::GetProjectFeatures {
                     project_id_or_name,
@@ -579,10 +562,9 @@ where
                     id_or_name,
                 } => {
                     let (_, source_id) = get_child_id(this, project_id_or_name, id_or_name)?;
-                    match this.get_entity(source_id) {
-                        Ok(e) => fill_entity(this, e).into(),
-                        Err(e) => e.into(),
-                    }
+                    this.get_entity(source_id)
+                        .map(|e| fill_entity(this, e))
+                        .into()
                 }
                 FeathrApiRequest::CreateProjectDataSource {
                     project_id_or_name,
@@ -621,10 +603,9 @@ where
                     id_or_name,
                 } => {
                     let (_, anchor_id) = get_child_id(this, project_id_or_name, id_or_name)?;
-                    match this.get_entity(anchor_id) {
-                        Ok(e) => fill_entity(this, e).into(),
-                        Err(e) => e.into(),
-                    }
+                    this.get_entity(anchor_id)
+                        .map(|e| fill_entity(this, e))
+                        .into()
                 }
                 FeathrApiRequest::CreateProjectAnchor {
                     project_id_or_name,
