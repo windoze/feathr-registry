@@ -134,7 +134,6 @@ impl From<EntityProperty> for Entity<EntityProperty> {
                 entity_type: EntityType::AnchorFeature,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
-                containers: Default::default(),
                 properties: v,
             },
             Attributes::DerivedFeature(DerivedFeatureAttributes {
@@ -146,7 +145,6 @@ impl From<EntityProperty> for Entity<EntityProperty> {
                 entity_type: EntityType::DerivedFeature,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
-                containers: Default::default(),
                 properties: v,
             },
             Attributes::Anchor(AnchorAttributes {
@@ -158,7 +156,6 @@ impl From<EntityProperty> for Entity<EntityProperty> {
                 entity_type: EntityType::Anchor,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
-                containers: Default::default(),
                 properties: v,
             },
             Attributes::Source(SourceAttributes {
@@ -170,7 +167,6 @@ impl From<EntityProperty> for Entity<EntityProperty> {
                 entity_type: EntityType::Source,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
-                containers: Default::default(),
                 properties: v,
             },
             Attributes::Project(ProjectAttributes {
@@ -182,7 +178,6 @@ impl From<EntityProperty> for Entity<EntityProperty> {
                 entity_type: EntityType::Project,
                 name: name.to_owned(),
                 qualified_name: qualified_name.to_owned(),
-                containers: Default::default(),
                 properties: v,
             },
         }

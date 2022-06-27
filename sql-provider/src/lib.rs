@@ -41,7 +41,7 @@ where
     /**
      * Get ids of all entry points
      */
-    async fn get_entry_points(&self) -> Result<Vec<Entity<EntityProp>>, RegistryError> {
+    fn get_entry_points(&self) -> Result<Vec<Entity<EntityProp>>, RegistryError> {
         Ok(self
             .entry_points
             .iter()
@@ -52,7 +52,7 @@ where
     /**
      * Get one entity by its id
      */
-    async fn get_entity(&self, uuid: Uuid) -> Result<Entity<EntityProp>, RegistryError> {
+    fn get_entity(&self, uuid: Uuid) -> Result<Entity<EntityProp>, RegistryError> {
         self.graph
             .node_weight(self.get_idx(uuid)?)
             .cloned()
@@ -62,7 +62,7 @@ where
     /**
      * Get one entity by its qualified name
      */
-    async fn get_entity_by_qualified_name(
+    fn get_entity_by_qualified_name(
         &self,
         qualified_name: &str,
     ) -> Result<Entity<EntityProp>, RegistryError> {
@@ -73,10 +73,7 @@ where
     /**
      * Get multiple entities by their ids
      */
-    async fn get_entities(
-        &self,
-        uuids: HashSet<Uuid>,
-    ) -> Result<Vec<Entity<EntityProp>>, RegistryError> {
+    fn get_entities(&self, uuids: HashSet<Uuid>) -> Result<Vec<Entity<EntityProp>>, RegistryError> {
         Ok(uuids
             .into_iter()
             .filter_map(|id| {
@@ -90,10 +87,7 @@ where
     /**
      * Get entity id by its name
      */
-    async fn get_entity_id_by_qualified_name(
-        &self,
-        qualified_name: &str,
-    ) -> Result<Uuid, RegistryError> {
+    fn get_entity_id_by_qualified_name(&self, qualified_name: &str) -> Result<Uuid, RegistryError> {
         self.name_id_map
             .get(qualified_name)
             .ok_or_else(|| RegistryError::EntityNotFound(qualified_name.to_string()))
@@ -103,7 +97,7 @@ where
     /**
      * Get all neighbors with specified connection type
      */
-    async fn get_neighbors(
+    fn get_neighbors(
         &self,
         uuid: Uuid,
         edge_type: EdgeType,
@@ -119,7 +113,7 @@ where
     /**
      * Traversal graph from `uuid` by following edges with specific edge type
      */
-    async fn bfs(
+    fn bfs(
         &self,
         uuid: Uuid,
         edge_type: EdgeType,
@@ -131,7 +125,7 @@ where
     /**
      * Get entity ids with FTS
      */
-    async fn search_entity(
+    fn search_entity(
         &self,
         query: &str,
         types: HashSet<EntityType>,
@@ -157,11 +151,11 @@ where
     /**
      * Get all entities and connections between them under a project
      */
-    async fn get_project(
+    fn get_project(
         &self,
         qualified_name: &str,
     ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge<EdgeProp>>), RegistryError> {
-        let uuid = self.get_entity_id(qualified_name).await?;
+        let uuid = self.get_entity_id(qualified_name)?;
         let (entities, edges) = self.get_project_by_id(uuid)?;
         Ok((entities.into_iter().collect(), edges.into_iter().collect()))
     }
@@ -170,14 +164,17 @@ where
     async fn new_project(&mut self, definition: &ProjectDef) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
         let prop = EntityProp::new_project(definition)?;
-        self.insert_entity(
-            definition.id,
-            EntityType::Project,
-            &definition.qualified_name,
-            &definition.qualified_name,
-            prop,
-        )
-        .await
+        let project_id = self
+            .insert_entity(
+                definition.id,
+                EntityType::Project,
+                &definition.qualified_name,
+                &definition.qualified_name,
+                prop,
+            )
+            .await?;
+        self.index_entity(project_id)?;
+        Ok(project_id)
     }
 
     // Create new source under specified project
@@ -205,6 +202,7 @@ where
             EdgeProp::new(project_id, source_id, EdgeType::Contains),
         )?;
 
+        self.index_entity(source_id)?;
         Ok(source_id)
     }
 
@@ -214,10 +212,7 @@ where
         project_id: Uuid,
         definition: &AnchorDef,
     ) -> Result<Uuid, RegistryError> {
-        if let Ok(e) = self
-            .get_entity_by_qualified_name(&definition.qualified_name)
-            .await
-        {
+        if let Ok(e) = self.get_entity_by_qualified_name(&definition.qualified_name) {
             debug!(
                 "Found existing entity {}, qualified_name '{}'",
                 e.id, e.qualified_name
@@ -225,7 +220,6 @@ where
             // We only check source for conflicts as the anchor is always empty when it's just created
             let source = self
                 .get_neighbors(e.id, EdgeType::Consumes)
-                .await
                 .expect("Data inconsistency detected");
             // An anchor has exactly one source
             assert!(source.len() == 1, "Data inconsistency detected");
@@ -241,8 +235,13 @@ where
         }
 
         if self.get_entity_by_id(definition.source_id).is_none() {
-            debug!("Source {} not found, cannot create anchor", definition.source_id);
-            return Err(RegistryError::EntityNotFound(definition.source_id.to_string()));
+            debug!(
+                "Source {} not found, cannot create anchor",
+                definition.source_id
+            );
+            return Err(RegistryError::EntityNotFound(
+                definition.source_id.to_string(),
+            ));
         }
 
         let prop = EntityProp::new_anchor(definition)?;
@@ -270,6 +269,7 @@ where
             EdgeProp::new(anchor_id, definition.source_id, EdgeType::Consumes),
         )?;
 
+        self.index_entity(anchor_id)?;
         Ok(anchor_id)
     }
 
@@ -307,7 +307,7 @@ where
         )?;
 
         // Anchor feature also consumes source of the anchor
-        let sources = self.get_neighbors(anchor_id, EdgeType::Consumes).await?;
+        let sources = self.get_neighbors(anchor_id, EdgeType::Consumes)?;
         for s in sources {
             self.connect(
                 feature_id,
@@ -317,6 +317,7 @@ where
             )?;
         }
 
+        self.index_entity(feature_id)?;
         Ok(feature_id)
     }
 
@@ -332,10 +333,7 @@ where
             .chain(definition.input_derived_features.iter())
             .copied()
             .collect();
-        if let Ok(e) = self
-            .get_entity_by_qualified_name(&definition.qualified_name)
-            .await
-        {
+        if let Ok(e) = self.get_entity_by_qualified_name(&definition.qualified_name) {
             debug!(
                 "Found existing entity {}, qualified_name '{}'",
                 e.id, e.qualified_name
@@ -343,7 +341,6 @@ where
             // Check if input features in the def are same as existing one
             let upstream: HashSet<Uuid> = self
                 .get_neighbors(e.id, EdgeType::Consumes)
-                .await
                 .expect("Data inconsistency detected")
                 .into_iter()
                 .map(|e| e.id)
@@ -361,7 +358,10 @@ where
 
         for id in input {
             if self.get_entity_by_id(id).is_none() {
-                debug!("Input feature {} not found, cannot create derived feature {}", id, definition.qualified_name);
+                debug!(
+                    "Input feature {} not found, cannot create derived feature {}",
+                    id, definition.qualified_name
+                );
                 return Err(RegistryError::EntityNotFound(id.to_string()));
             }
         }
@@ -397,6 +397,7 @@ where
             )?;
         }
 
+        self.index_entity(feature_id)?;
         Ok(feature_id)
     }
 

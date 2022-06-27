@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::{collections::HashSet, fmt::Debug};
+use std::fmt::Debug;
 
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
@@ -56,7 +56,6 @@ where
     pub entity_type: EntityType,
     pub name: String,
     pub qualified_name: String,
-    pub containers: HashSet<Uuid>,
     pub properties: Prop,
 }
 
@@ -151,7 +150,6 @@ where
                     entity_type,
                     name,
                     qualified_name,
-                    containers: Default::default(),
                     properties,
                 })
             }
@@ -212,7 +210,6 @@ where
                     entity_type,
                     name,
                     qualified_name,
-                    containers: Default::default(),
                     properties,
                 })
             }

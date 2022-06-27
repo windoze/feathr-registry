@@ -1,4 +1,4 @@
-use registry_provider::{ToDocString, SerializableRegistry};
+use registry_provider::{ToDocString, SerializableRegistry, EntityPropMutator, EdgePropMutator};
 use serde::{
     de::{self, MapAccess, SeqAccess, Visitor},
     ser::SerializeStruct,
@@ -26,8 +26,16 @@ where
 
 impl<'de, EntityProp, EdgeProp> Deserialize<'de> for Registry<EntityProp, EdgeProp>
 where
-    EntityProp: Clone + Debug + PartialEq + Eq + ToDocString + Deserialize<'de>,
-    EdgeProp: Clone + Debug + PartialEq + Eq + Deserialize<'de>,
+EntityProp: Clone
++ Debug
++ PartialEq
++ Eq
++ EntityPropMutator
++ ToDocString
++ Send
++ Sync
++ Deserialize<'de>,
+EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -46,8 +54,16 @@ where
 
         impl<'de, EntityProp, EdgeProp> Visitor<'de> for RegistryVisitor<EntityProp, EdgeProp>
         where
-            EntityProp: Clone + Debug + PartialEq + Eq + ToDocString + Deserialize<'de>,
-            EdgeProp: Clone + Debug + PartialEq + Eq + Deserialize<'de>,
+        EntityProp: Clone
+        + Debug
+        + PartialEq
+        + Eq
+        + EntityPropMutator
+        + ToDocString
+        + Send
+        + Sync
+        + Deserialize<'de>,
+    EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deserialize<'de>,
         {
             type Value = Registry<EntityProp, EdgeProp>;
 
@@ -114,8 +130,17 @@ where
 
 impl<'de, EntityProp, EdgeProp> SerializableRegistry<'de> for Registry<EntityProp, EdgeProp>
 where
-    EntityProp: Clone + Debug + PartialEq + Eq + ToDocString + Serialize + Deserialize<'de>,
-    EdgeProp: Clone + Debug + PartialEq + Eq + Serialize + Deserialize<'de>,
+EntityProp: Clone
++ Debug
++ PartialEq
++ Eq
++ EntityPropMutator
++ ToDocString
++ Send
++ Sync
++ Serialize
++ Deserialize<'de>,
+EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Serialize + Deserialize<'de>,
 {
     fn take_snapshot(&self) -> Result<Vec<u8>, registry_provider::RegistryError> {
         // TODO: unwrap

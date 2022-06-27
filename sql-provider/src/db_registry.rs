@@ -133,17 +133,22 @@ where
 #[allow(dead_code)]
 impl<'de, EntityProp, EdgeProp> Registry<EntityProp, EdgeProp>
 where
-    EntityProp: Clone + Debug + PartialEq + Eq + ToDocString + Deserialize<'de>,
-    EdgeProp: Clone + Debug + PartialEq + Eq + Deserialize<'de>,
+    EntityProp: Clone
+        + Debug
+        + PartialEq
+        + Eq
+        + EntityPropMutator
+        + ToDocString
+        + Send
+        + Sync
+        + Deserialize<'de>,
+    EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deserialize<'de>,
 {
     pub fn from_content(
         graph: Graph<Entity<EntityProp>, Edge<EdgeProp>, Directed>,
         deleted: HashSet<Uuid>,
     ) -> Self {
-        let mut fts_index = FtsIndex::new();
-        graph.node_weights().for_each(|w| {
-            fts_index.add_doc(w).ok();
-        });
+        let fts_index = FtsIndex::new();
         let node_id_map = graph
             .node_indices()
             .filter_map(|idx| graph.node_weight(idx).map(|w| (w.id, idx)))
@@ -161,7 +166,7 @@ where
                     .unwrap_or(false)
             })
             .collect();
-        Self {
+        let mut ret = Self {
             graph,
             node_id_map,
             name_id_map,
@@ -169,7 +174,14 @@ where
             entry_points,
             fts_index,
             external_storage: Default::default(),
-        }
+        };
+        let ids: Vec<_> = ret.node_id_map.keys().copied().collect();
+
+        ids.into_iter().for_each(|id| {
+            ret.index_entity(id.to_owned()).ok();
+        });
+
+        ret
     }
 }
 
@@ -229,14 +241,8 @@ where
 
         self.fts_index.enable(true);
         for id in ids {
-            match self.get_entity_by_id(id) {
-                Some(e) => {
-                    self.fts_index.add_doc(&e)?;
-                }
-                None => {}
-            }
+            self.index_entity(id).ok();
         }
-
         self.fts_index.commit()?;
 
         Ok(())
@@ -488,31 +494,9 @@ where
         T1: ToString,
         T2: ToString,
     {
-        if self.name_id_map.contains_key(&qualified_name.to_string()) {
-            let e = self
-                .get_entity_by_qualified_name(&qualified_name.to_string())
-                .await?;
-            if e.properties == properties {
-                // Creating an exactly same entity, just return existing id without reporting error
-                return Ok(e.id);
-            }
-            return Err(RegistryError::EntityNameExists(qualified_name.to_string()));
-        }
         let id = Uuid::new_v4();
-        let idx = self
-            .insert_node(
-                id,
-                entity_type,
-                name.to_string(),
-                qualified_name.to_string(),
-                properties,
-            )
-            .await?;
-        self.graph.node_weight(idx).map(|e| {
-            // println!("Indexing {:#?}", e);
-            self.fts_index.index(e)
-        });
-        Ok(id)
+        self.insert_entity(id, entity_type, name, qualified_name, properties)
+            .await
     }
 
     pub async fn insert_entity<T1, T2>(
@@ -532,16 +516,14 @@ where
             return Err(RegistryError::EntityIdExists(uuid));
         }
         if self.name_id_map.contains_key(&qualified_name.to_string()) {
-            let e = self
-                .get_entity_by_qualified_name(&qualified_name.to_string())
-                .await?;
+            let e = self.get_entity_by_qualified_name(&qualified_name.to_string())?;
             if e.properties == properties {
                 // Creating an exactly same entity, just return existing id without reporting error
                 return Ok(e.id);
             }
             return Err(RegistryError::EntityNameExists(qualified_name.to_string()));
         }
-        let idx = self
+        self
             .insert_node(
                 uuid,
                 entity_type,
@@ -550,8 +532,19 @@ where
                 properties,
             )
             .await?;
-        self.graph.node_weight(idx).map(|e| self.fts_index.index(e));
         Ok(uuid)
+    }
+
+    pub fn index_entity(&mut self, id: Uuid) -> Result<(), RegistryError> {
+        if let Some(e) = self.get_entity_by_id(id) {
+            let scopes = self
+                .get_neighbors(id, EdgeType::BelongsTo)?
+                .iter()
+                .map(|e| e.id.to_string())
+                .collect();
+            self.fts_index.index(&e, scopes)?;
+        }
+        Ok(())
     }
 
     pub async fn delete_entity_by_id(&mut self, uuid: Uuid) -> Result<(), RegistryError> {
@@ -711,7 +704,6 @@ where
             entity_type,
             name,
             qualified_name: qualified_name.clone(),
-            containers: Default::default(),
             properties,
         };
         for storage in &self.external_storage {
@@ -739,11 +731,9 @@ where
         let from = self.graph.node_weight(from_idx).unwrap().to_owned();
         let to = self.graph.node_weight(to_idx).unwrap().to_owned();
         if let Some(w) = self.graph.node_weight_mut(from_idx) {
-            w.containers = from.containers;
             w.properties = from.properties
         }
         if let Some(w) = self.graph.node_weight_mut(to_idx) {
-            w.containers = to.containers;
             w.properties = to.properties
         }
 

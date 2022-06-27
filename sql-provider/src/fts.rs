@@ -93,14 +93,14 @@ impl FtsIndex {
         self.enabled = enabled;
     }
 
-    pub fn add_doc<T: ToDoc>(&mut self, d: &T) -> Result<(), FtsError> {
+    pub fn add_doc<T: ToDoc>(&mut self, d: &T, scopes: Vec<String>) -> Result<(), FtsError> {
         if self.writer.is_none() {
             self.writer = Some(self.index.writer(30_000_000).unwrap());
         }
         let doc = doc!(
             self.name_field => d.get_name(),
             self.id_field => d.get_id(),
-            self.scopes_field => d.get_scopes().join(" "),
+            self.scopes_field => scopes.join(" "),
             self.type_field => d.get_type(),
             self.body_field => d.get_body(),
         );
@@ -116,11 +116,15 @@ impl FtsIndex {
         Ok(())
     }
 
-    pub fn index<T: ToDoc + Debug>(&mut self, doc: &T) -> Result<(), FtsError> {
+    pub fn index<T: ToDoc + Debug>(
+        &mut self,
+        doc: &T,
+        scopes: Vec<String>,
+    ) -> Result<(), FtsError> {
         if !self.enabled {
             return Ok(());
         }
-        self.add_doc(doc)?;
+        self.add_doc(doc, scopes)?;
         self.commit()?;
         Ok(())
     }
@@ -223,9 +227,6 @@ mod tests {
         fn get_id(&self) -> String {
             self.id.to_owned()
         }
-        fn get_scopes(&self) -> Vec<String> {
-            self.scopes.to_owned()
-        }
         fn get_type(&self) -> String {
             self.type_.to_owned()
         }
@@ -248,7 +249,7 @@ mod tests {
                 body: format!("This is the body of name{}", i),
             };
             docs.insert(id, a.clone());
-            fts.add_doc(&a).unwrap();
+            fts.add_doc(&a, vec![format!("scope-{}", i % 2), format!("scope-{}", i % 5)]).unwrap();
         }
         fts.commit().unwrap();
         let ids = fts

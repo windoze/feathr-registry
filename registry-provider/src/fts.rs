@@ -14,7 +14,6 @@ use crate::{
 pub trait ToDoc {
     fn get_name(&self) -> String;
     fn get_id(&self) -> String;
-    fn get_scopes(&self) -> Vec<String>;
     fn get_type(&self) -> String;
     fn get_body(&self) -> String;
 }
@@ -36,10 +35,6 @@ where
 
     fn get_id(&self) -> String {
         self.id.to_string()
-    }
-
-    fn get_scopes(&self) -> Vec<String> {
-        self.containers.iter().map(|id| id.to_string()).collect()
     }
 
     fn get_type(&self) -> String {

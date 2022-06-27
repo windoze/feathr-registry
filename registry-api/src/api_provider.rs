@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     AnchorDef, AnchorFeatureDef, ApiError, DerivedFeatureDef, Entities, Entity, EntityAttributes,
-    EntityLineage, IntoApiResult, ProjectDef, SourceDef, EntityRef,
+    EntityLineage, EntityRef, IntoApiResult, ProjectDef, SourceDef,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -273,24 +273,24 @@ where
     T: RegistryProvider<EntityProperty, EdgeProperty> + Sync + Send,
 {
     async fn request(&mut self, request: FeathrApiRequest) -> FeathrApiResponse {
-        async fn get_id<T>(t: &T, id_or_name: String) -> Result<Uuid, RegistryError>
+        fn get_id<T>(t: &T, id_or_name: String) -> Result<Uuid, RegistryError>
         where
             T: RegistryProvider<EntityProperty, EdgeProperty>,
         {
             match Uuid::parse_str(&id_or_name) {
                 Ok(id) => Ok(id),
-                Err(_) => t.get_entity_id(&id_or_name).await,
+                Err(_) => t.get_entity_id(&id_or_name),
             }
         }
 
-        async fn get_name<T>(t: &T, uuid: Uuid) -> Result<String, RegistryError>
+        fn get_name<T>(t: &T, uuid: Uuid) -> Result<String, RegistryError>
         where
             T: RegistryProvider<EntityProperty, EdgeProperty>,
         {
-            t.get_entity_name(uuid).await
+            t.get_entity_name(uuid)
         }
 
-        async fn get_child_id<T>(
+        fn get_child_id<T>(
             t: &T,
             parent_id_or_name: String,
             child_id_or_name: String,
@@ -300,18 +300,18 @@ where
         {
             debug!("Parent name: {}", parent_id_or_name);
             debug!("Child name: {}", child_id_or_name);
-            let parent_id = get_id(t, parent_id_or_name).await?;
-            let child_id = match get_id(t, child_id_or_name.clone()).await {
+            let parent_id = get_id(t, parent_id_or_name)?;
+            let child_id = match get_id(t, child_id_or_name.clone()) {
                 Ok(id) => id,
                 Err(_) => {
-                    let project_name = get_name(t, parent_id).await?;
-                    get_id(t, format!("{}__{}", project_name, child_id_or_name)).await?
+                    let project_name = get_name(t, parent_id)?;
+                    get_id(t, format!("{}__{}", project_name, child_id_or_name))?
                 }
             };
             Ok((parent_id, child_id))
         }
 
-        async fn search_entities<T>(
+        fn search_entities<T>(
             t: &T,
             keyword: Option<String>,
             size: Option<usize>,
@@ -322,20 +322,18 @@ where
         where
             T: RegistryProvider<EntityProperty, EdgeProperty>,
         {
-            let r = t
-                .search_entity(
-                    &keyword.unwrap_or_default(),
-                    types,
-                    scope,
-                    size.unwrap_or(100),
-                    offset.unwrap_or(0),
-                )
-                .await;
+            let r = t.search_entity(
+                &keyword.unwrap_or_default(),
+                types,
+                scope,
+                size.unwrap_or(100),
+                offset.unwrap_or(0),
+            );
             match r {
                 Ok(entities) => {
                     let mut es: Vec<Entity> = vec![];
                     for e in entities {
-                        es.push(fill_entity(t, e).await)
+                        es.push(fill_entity(t, e))
                     }
                     Ok(es)
                 }
@@ -343,7 +341,7 @@ where
             }
         }
 
-        async fn search_children<T>(
+        fn search_children<T>(
             t: &T,
             id_or_name: String,
             keyword: Option<String>,
@@ -355,29 +353,26 @@ where
             T: RegistryProvider<EntityProperty, EdgeProperty>,
         {
             debug!("Project name: {}", id_or_name);
-            let scope_id = get_id(t, id_or_name).await?;
+            let scope_id = get_id(t, id_or_name)?;
 
             if keyword.is_blank() {
-                let r = t.get_children(scope_id, types).await;
+                let r = t.get_children(scope_id, types);
                 match r {
                     Ok(entities) => {
                         let mut es: Vec<Entity> = vec![];
                         for e in entities {
-                            es.push(fill_entity(t, e).await)
+                            es.push(fill_entity(t, e))
                         }
                         Ok(es)
                     }
                     Err(e) => Err(e),
                 }
             } else {
-                search_entities(t, keyword, size, offset, types, Some(scope_id)).await
+                search_entities(t, keyword, size, offset, types, Some(scope_id))
             }
         }
 
-        async fn fill_entity<T>(
-            this: &T,
-            mut e: registry_provider::Entity<EntityProperty>,
-        ) -> Entity
+        fn fill_entity<T>(this: &T, mut e: registry_provider::Entity<EntityProperty>) -> Entity
         where
             T: RegistryProvider<EntityProperty, EdgeProperty>,
         {
@@ -388,7 +383,6 @@ where
                     // Contents
                     let children = this
                         .get_neighbors(project_id, EdgeType::Contains)
-                        .await
                         .expect("Data inconsistency detected");
                     match &mut project.attributes {
                         EntityAttributes::Project(attr) => {
@@ -427,14 +421,12 @@ where
                     // Source
                     let source = this
                         .get_neighbors(anchor_id, EdgeType::Consumes)
-                        .await
                         .expect("Data inconsistency detected")
                         .pop()
                         .expect("Data inconsistency detected");
                     // Features
                     let features: Vec<EntityRef> = this
                         .get_neighbors(anchor_id, EdgeType::Contains)
-                        .await
                         .expect("Data inconsistency detected")
                         .into_iter()
                         .map(|e| EntityRef::new(&e))
@@ -454,7 +446,6 @@ where
                     // Contents
                     let upstream = this
                         .get_neighbors(feature_id, EdgeType::Consumes)
-                        .await
                         .expect("Data inconsistency detected");
                     match &mut feature.attributes {
                         EntityAttributes::DerivedFeature(attr) => {
@@ -495,12 +486,12 @@ where
                     size,
                     offset,
                 } => if keyword.is_blank() {
-                    let r = this.get_entry_points().await;
+                    let r = this.get_entry_points();
                     match r {
                         Ok(entities) => {
                             let mut es: Vec<Entity> = vec![];
                             for e in entities {
-                                es.push(fill_entity(this, e).await)
+                                es.push(fill_entity(this, e))
                             }
                             Ok(es)
                         }
@@ -515,7 +506,6 @@ where
                         set![registry_provider::EntityType::Project],
                         None,
                     )
-                    .await
                 }
                 .map(|r| {
                     r.into_iter()
@@ -524,19 +514,19 @@ where
                 })
                 .into(),
                 FeathrApiRequest::GetProject { id_or_name } => {
-                    match this.get_entity_by_id_or_qualified_name(&id_or_name).await {
-                        Ok(e) => fill_entity(this, e).await.into(),
+                    match this.get_entity_by_id_or_qualified_name(&id_or_name) {
+                        Ok(e) => fill_entity(this, e).into(),
                         Err(e) => e.into(),
                     }
                 }
                 FeathrApiRequest::GetProjectLineage { id_or_name } => {
                     debug!("Project name: {}", id_or_name);
 
-                    match this.get_project(&id_or_name).await {
+                    match this.get_project(&id_or_name) {
                         Ok((entities, edges)) => {
                             let mut es: Vec<Entity> = vec![];
                             for e in entities {
-                                es.push(fill_entity(this, e).await)
+                                es.push(fill_entity(this, e))
                             }
                             (es, edges).into()
                         }
@@ -561,7 +551,6 @@ where
                             registry_provider::EntityType::DerivedFeature
                         ],
                     )
-                    .await
                     .into()
                 }
                 FeathrApiRequest::CreateProject { mut definition } => {
@@ -583,16 +572,15 @@ where
                         offset,
                         set![registry_provider::EntityType::Source],
                     )
-                    .await
                     .into()
                 }
                 FeathrApiRequest::GetProjectDataSource {
                     project_id_or_name,
                     id_or_name,
                 } => {
-                    let (_, source_id) = get_child_id(this, project_id_or_name, id_or_name).await?;
-                    match this.get_entity(source_id).await {
-                        Ok(e) => fill_entity(this, e).await.into(),
+                    let (_, source_id) = get_child_id(this, project_id_or_name, id_or_name)?;
+                    match this.get_entity(source_id) {
+                        Ok(e) => fill_entity(this, e).into(),
                         Err(e) => e.into(),
                     }
                 }
@@ -604,8 +592,8 @@ where
                         "Creating Source in project {}: {:?}",
                         project_id_or_name, definition
                     );
-                    let project_id = get_id(this, project_id_or_name).await?;
-                    let project_name = get_name(this, project_id).await?;
+                    let project_id = get_id(this, project_id_or_name)?;
+                    let project_name = get_name(this, project_id)?;
                     definition.qualified_name = format!("{}__{}", project_name, definition.name);
                     this.new_source(project_id, &definition.try_into()?)
                         .await
@@ -626,16 +614,15 @@ where
                         offset,
                         set![registry_provider::EntityType::Anchor],
                     )
-                    .await
                     .into()
                 }
                 FeathrApiRequest::GetProjectAnchor {
                     project_id_or_name,
                     id_or_name,
                 } => {
-                    let (_, anchor_id) = get_child_id(this, project_id_or_name, id_or_name).await?;
-                    match this.get_entity(anchor_id).await {
-                        Ok(e) => fill_entity(this, e).await.into(),
+                    let (_, anchor_id) = get_child_id(this, project_id_or_name, id_or_name)?;
+                    match this.get_entity(anchor_id) {
+                        Ok(e) => fill_entity(this, e).into(),
                         Err(e) => e.into(),
                     }
                 }
@@ -643,8 +630,8 @@ where
                     project_id_or_name,
                     mut definition,
                 } => {
-                    let project_id = get_id(this, project_id_or_name).await?;
-                    let project_name = get_name(this, project_id).await?;
+                    let project_id = get_id(this, project_id_or_name)?;
+                    let project_name = get_name(this, project_id)?;
                     definition.qualified_name = format!("{}__{}", project_name, definition.name);
                     this.new_anchor(project_id, &definition.try_into()?)
                         .await
@@ -665,23 +652,21 @@ where
                         offset,
                         set![registry_provider::EntityType::DerivedFeature],
                     )
-                    .await
                     .into()
                 }
                 FeathrApiRequest::GetProjectDerivedFeature {
                     project_id_or_name,
                     id_or_name,
                 } => {
-                    let (_, feature_id) =
-                        get_child_id(this, project_id_or_name, id_or_name).await?;
-                    this.get_entity(feature_id).await.into()
+                    let (_, feature_id) = get_child_id(this, project_id_or_name, id_or_name)?;
+                    this.get_entity(feature_id).into()
                 }
                 FeathrApiRequest::CreateProjectDerivedFeature {
                     project_id_or_name,
                     mut definition,
                 } => {
-                    let project_id = get_id(this, project_id_or_name).await?;
-                    let project_name = get_name(this, project_id).await?;
+                    let project_id = get_id(this, project_id_or_name)?;
+                    let project_name = get_name(this, project_id)?;
                     definition.qualified_name = format!("{}__{}", project_name, definition.name);
                     this.new_derived_feature(project_id, &definition.try_into()?)
                         .await
@@ -694,8 +679,7 @@ where
                     size,
                     offset,
                 } => {
-                    let (_, anchor_id) =
-                        get_child_id(this, project_id_or_name, anchor_id_or_name).await?;
+                    let (_, anchor_id) = get_child_id(this, project_id_or_name, anchor_id_or_name)?;
                     search_children(
                         this,
                         anchor_id.to_string(),
@@ -704,7 +688,6 @@ where
                         offset,
                         set![registry_provider::EntityType::AnchorFeature],
                     )
-                    .await
                     .into()
                 }
                 FeathrApiRequest::GetAnchorFeature {
@@ -712,11 +695,9 @@ where
                     anchor_id_or_name,
                     id_or_name,
                 } => {
-                    let (_, anchor_id) =
-                        get_child_id(this, project_id_or_name, anchor_id_or_name).await?;
-                    let (_, feature_id) =
-                        get_child_id(this, anchor_id.to_string(), id_or_name).await?;
-                    this.get_entity(feature_id).await.into()
+                    let (_, anchor_id) = get_child_id(this, project_id_or_name, anchor_id_or_name)?;
+                    let (_, feature_id) = get_child_id(this, anchor_id.to_string(), id_or_name)?;
+                    this.get_entity(feature_id).into()
                 }
                 FeathrApiRequest::CreateAnchorFeature {
                     project_id_or_name,
@@ -724,29 +705,26 @@ where
                     mut definition,
                 } => {
                     let (project_id, anchor_id) =
-                        get_child_id(this, project_id_or_name, anchor_id_or_name).await?;
-                    let project_name = get_name(this, project_id).await?;
-                    let anchor_name = get_name(this, anchor_id).await?;
+                        get_child_id(this, project_id_or_name, anchor_id_or_name)?;
+                    let project_name = get_name(this, project_id)?;
+                    let anchor_name = get_name(this, anchor_id)?;
                     definition.qualified_name =
                         format!("{}__{}__{}", project_name, anchor_name, definition.name);
                     this.new_anchor_feature(project_id, anchor_id, &definition.try_into()?)
                         .await
                         .into()
                 }
-                FeathrApiRequest::GetFeature { id_or_name } => this
-                    .get_entity_by_id_or_qualified_name(&id_or_name)
-                    .await
-                    .into(),
+                FeathrApiRequest::GetFeature { id_or_name } => {
+                    this.get_entity_by_id_or_qualified_name(&id_or_name).into()
+                }
                 FeathrApiRequest::GetFeatureLineage { id_or_name } => {
                     debug!("Feature name: {}", id_or_name);
-                    let id = get_id(this, id_or_name).await?;
+                    let id = get_id(this, id_or_name)?;
                     let (up_entities, up_edges) = this
                         .bfs(id, registry_provider::EdgeType::Consumes, 100)
-                        .await
                         .map_api_error()?;
                     let (down_entities, down_edges) = this
                         .bfs(id, registry_provider::EdgeType::Produces, 100)
-                        .await
                         .map_api_error()?;
                     (
                         up_entities
