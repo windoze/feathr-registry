@@ -23,6 +23,21 @@ pub struct EntityRef {
     pub unique_attributes: HashMap<String, String>,
 }
 
+impl EntityRef {
+    pub fn new<Prop>(e: &crate::Entity<Prop>) -> Self
+    where
+        Prop: Clone + Debug + PartialEq + Eq,
+    {
+        Self {
+            guid: e.id,
+            type_name: e.entity_type.get_name().to_string(),
+            unique_attributes: [("qualifiedName".to_string(), e.qualified_name.clone())]
+                .into_iter()
+                .collect(),
+        }
+    }
+}
+
 impl Hash for EntityRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.guid.hash(state);

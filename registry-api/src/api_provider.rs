@@ -3,13 +3,15 @@ use std::collections::HashSet;
 use async_trait::async_trait;
 use common_utils::{set, Blank};
 use log::debug;
-use registry_provider::{Edge, EdgeProperty, EntityProperty, RegistryError, RegistryProvider};
+use registry_provider::{
+    Edge, EdgeProperty, EdgeType, EntityProperty, RegistryError, RegistryProvider,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    AnchorDef, AnchorFeatureDef, ApiError, DerivedFeatureDef, Entities, Entity, EntityLineage,
-    IntoApiResult, ProjectDef, SourceDef,
+    AnchorDef, AnchorFeatureDef, ApiError, DerivedFeatureDef, Entities, Entity, EntityAttributes,
+    EntityLineage, EntityRef, IntoApiResult, ProjectDef, SourceDef,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -172,103 +174,90 @@ impl FeathrApiResponse {
     }
 }
 
-impl From<Result<(), RegistryError>> for FeathrApiResponse {
-    fn from(v: Result<(), RegistryError>) -> Self {
-        match v {
-            Ok(_) => Self::Unit,
-            Err(e) => Self::Error(e.into()),
-        }
+impl From<RegistryError> for FeathrApiResponse {
+    fn from(v: RegistryError) -> Self {
+        Self::Error(v.into())
     }
 }
 
-impl From<Result<Vec<String>, RegistryError>> for FeathrApiResponse {
-    fn from(v: Result<Vec<String>, RegistryError>) -> Self {
-        match v {
-            Ok(v) => Self::EntityNames(v),
-            Err(e) => Self::Error(e.into()),
-        }
+impl From<()> for FeathrApiResponse {
+    fn from(_: ()) -> Self {
+        Self::Unit
     }
 }
 
-impl From<Result<Uuid, RegistryError>> for FeathrApiResponse {
-    fn from(v: Result<Uuid, RegistryError>) -> Self {
-        match v {
-            Ok(v) => Self::Uuid(v),
-            Err(e) => Self::Error(e.into()),
-        }
+impl From<Uuid> for FeathrApiResponse {
+    fn from(v: Uuid) -> Self {
+        Self::Uuid(v)
     }
 }
 
-impl From<Result<registry_provider::Entity<EntityProperty>, RegistryError>> for FeathrApiResponse {
-    fn from(v: Result<registry_provider::Entity<EntityProperty>, RegistryError>) -> Self {
-        match v {
-            Ok(v) => Self::Entity(v.into()),
-            Err(e) => Self::Error(e.into()),
-        }
+impl From<Vec<String>> for FeathrApiResponse {
+    fn from(v: Vec<String>) -> Self {
+        Self::EntityNames(v)
     }
 }
 
-impl From<Result<Entity, RegistryError>> for FeathrApiResponse {
-    fn from(v: Result<Entity, RegistryError>) -> Self {
-        match v {
-            Ok(v) => Self::Entity(v),
-            Err(e) => Self::Error(e.into()),
-        }
+impl From<Entity> for FeathrApiResponse {
+    fn from(v: Entity) -> Self {
+        Self::Entity(v)
     }
 }
 
-impl From<Result<Vec<registry_provider::Entity<EntityProperty>>, RegistryError>>
-    for FeathrApiResponse
-{
-    fn from(v: Result<Vec<registry_provider::Entity<EntityProperty>>, RegistryError>) -> Self {
-        match v {
-            Ok(v) => Self::Entities(v.into_iter().collect()),
-            Err(e) => Self::Error(e.into()),
-        }
+impl From<Vec<Entity>> for FeathrApiResponse {
+    fn from(v: Vec<Entity>) -> Self {
+        Self::Entities(Entities { entities: v })
     }
 }
 
-impl From<Result<Entities, RegistryError>> for FeathrApiResponse {
-    fn from(v: Result<Entities, RegistryError>) -> Self {
-        match v {
-            Ok(v) => Self::Entities(v),
-            Err(e) => Self::Error(e.into()),
-        }
+impl From<registry_provider::Entity<EntityProperty>> for FeathrApiResponse {
+    fn from(v: registry_provider::Entity<EntityProperty>) -> Self {
+        Self::Entity(v.into())
+    }
+}
+
+impl From<Vec<registry_provider::Entity<EntityProperty>>> for FeathrApiResponse {
+    fn from(v: Vec<registry_provider::Entity<EntityProperty>>) -> Self {
+        Self::Entities(v.into_iter().collect())
     }
 }
 
 impl
-    From<
-        Result<
-            (
-                Vec<registry_provider::Entity<EntityProperty>>,
-                Vec<Edge<EdgeProperty>>,
-            ),
-            RegistryError,
-        >,
-    > for FeathrApiResponse
+    From<(
+        Vec<registry_provider::Entity<EntityProperty>>,
+        Vec<Edge<EdgeProperty>>,
+    )> for FeathrApiResponse
 {
     fn from(
-        v: Result<
-            (
-                Vec<registry_provider::Entity<EntityProperty>>,
-                Vec<Edge<EdgeProperty>>,
-            ),
-            RegistryError,
-        >,
+        v: (
+            Vec<registry_provider::Entity<EntityProperty>>,
+            Vec<Edge<EdgeProperty>>,
+        ),
     ) -> Self {
-        match v {
-            Ok(v) => Self::EntityLineage(v.into()),
-            Err(e) => Self::Error(e.into()),
-        }
+        Self::EntityLineage(v.into())
     }
 }
 
-impl From<Result<EntityLineage, RegistryError>> for FeathrApiResponse {
-    fn from(v: Result<EntityLineage, RegistryError>) -> Self {
+impl From<(Vec<Entity>, Vec<Edge<EdgeProperty>>)> for FeathrApiResponse {
+    fn from(v: (Vec<Entity>, Vec<Edge<EdgeProperty>>)) -> Self {
+        Self::EntityLineage(v.into())
+    }
+}
+
+impl From<EntityLineage> for FeathrApiResponse {
+    fn from(v: EntityLineage) -> Self {
+        Self::EntityLineage(v)
+    }
+}
+
+impl<T, E> From<Result<T, E>> for FeathrApiResponse
+where
+    FeathrApiResponse: From<T> + From<E>,
+{
+    fn from(v: Result<T, E>) -> Self {
         match v {
-            Ok(v) => Self::EntityLineage(v),
-            Err(e) => Self::Error(e.into()),
+            Ok(t) => t.into(),
+            Err(e) => e.into(),
         }
     }
 }
@@ -329,18 +318,29 @@ where
             offset: Option<usize>,
             types: HashSet<registry_provider::EntityType>,
             scope: Option<Uuid>,
-        ) -> Result<Vec<registry_provider::Entity<EntityProperty>>, RegistryError>
+        ) -> Result<Vec<Entity>, RegistryError>
         where
             T: RegistryProvider<EntityProperty, EdgeProperty>,
         {
-            t.search_entity(
-                &keyword.unwrap_or_default(),
-                types,
-                scope,
-                size.unwrap_or(100),
-                offset.unwrap_or(0),
-            )
-            .await
+            let r = t
+                .search_entity(
+                    &keyword.unwrap_or_default(),
+                    types,
+                    scope,
+                    size.unwrap_or(100),
+                    offset.unwrap_or(0),
+                )
+                .await;
+            match r {
+                Ok(entities) => {
+                    let mut es: Vec<Entity> = vec![];
+                    for e in entities {
+                        es.push(fill_entity(t, e).await)
+                    }
+                    Ok(es)
+                }
+                Err(e) => Err(e),
+            }
         }
 
         async fn search_children<T>(
@@ -350,7 +350,7 @@ where
             size: Option<usize>,
             offset: Option<usize>,
             types: HashSet<registry_provider::EntityType>,
-        ) -> Result<Vec<registry_provider::Entity<EntityProperty>>, RegistryError>
+        ) -> Result<Vec<Entity>, RegistryError>
         where
             T: RegistryProvider<EntityProperty, EdgeProperty>,
         {
@@ -358,10 +358,127 @@ where
             let scope_id = get_id(t, id_or_name).await?;
 
             if keyword.is_blank() {
-                t.get_children(scope_id, types).await
+                let r = t.get_children(scope_id, types).await;
+                match r {
+                    Ok(entities) => {
+                        let mut es: Vec<Entity> = vec![];
+                        for e in entities {
+                            es.push(fill_entity(t, e).await)
+                        }
+                        Ok(es)
+                    }
+                    Err(e) => Err(e),
+                }
             } else {
-                search_entities(t, keyword, size, offset, types, Some(scope_id))
-                    .await
+                search_entities(t, keyword, size, offset, types, Some(scope_id)).await
+            }
+        }
+
+        async fn fill_entity<T>(
+            this: &T,
+            mut e: registry_provider::Entity<EntityProperty>,
+        ) -> Entity
+        where
+            T: RegistryProvider<EntityProperty, EdgeProperty>,
+        {
+            match &mut e.properties.attributes {
+                registry_provider::Attributes::Project(_) => {
+                    let project_id = e.id;
+                    let mut project: Entity = e.into();
+                    // Contents
+                    let children = this
+                        .get_neighbors(project_id, EdgeType::Contains)
+                        .await
+                        .expect("Data inconsistency detected");
+                    match &mut project.attributes {
+                        EntityAttributes::Project(attr) => {
+                            attr.sources = children
+                                .iter()
+                                .filter(|&e| e.entity_type == registry_provider::EntityType::Source)
+                                .map(EntityRef::new)
+                                .collect();
+                            attr.anchors = children
+                                .iter()
+                                .filter(|&e| e.entity_type == registry_provider::EntityType::Anchor)
+                                .map(EntityRef::new)
+                                .collect();
+                            attr.anchor_features = children
+                                .iter()
+                                .filter(|&e| {
+                                    e.entity_type == registry_provider::EntityType::AnchorFeature
+                                })
+                                .map(EntityRef::new)
+                                .collect();
+                            attr.derived_features = children
+                                .iter()
+                                .filter(|&e| {
+                                    e.entity_type == registry_provider::EntityType::DerivedFeature
+                                })
+                                .map(EntityRef::new)
+                                .collect();
+                        }
+                        _ => panic!("Data inconsistency detected"),
+                    };
+                    project
+                }
+                registry_provider::Attributes::Anchor(_) => {
+                    let anchor_id = e.id;
+                    let mut anchor: Entity = e.into();
+                    // Source
+                    let source = this
+                        .get_neighbors(anchor_id, EdgeType::Consumes)
+                        .await
+                        .expect("Data inconsistency detected")
+                        .pop()
+                        .expect("Data inconsistency detected");
+                    // Features
+                    let features: Vec<EntityRef> = this
+                        .get_neighbors(anchor_id, EdgeType::Contains)
+                        .await
+                        .expect("Data inconsistency detected")
+                        .into_iter()
+                        .map(|e| registry_provider::EntityRef::new(&e).into())
+                        .collect();
+                    match &mut anchor.attributes {
+                        EntityAttributes::Anchor(attr) => {
+                            attr.source = Some(registry_provider::EntityRef::new(&source).into());
+                            attr.features = features;
+                        }
+                        _ => panic!("Data inconsistency detected"),
+                    };
+                    anchor
+                }
+                registry_provider::Attributes::DerivedFeature(_) => {
+                    let feature_id = e.id;
+                    let mut feature: Entity = e.into();
+                    // Contents
+                    let upstream = this
+                        .get_neighbors(feature_id, EdgeType::Consumes)
+                        .await
+                        .expect("Data inconsistency detected");
+                    match &mut feature.attributes {
+                        EntityAttributes::DerivedFeature(attr) => {
+                            attr.input_anchor_features = upstream
+                                .iter()
+                                .filter(|&e| {
+                                    e.entity_type == registry_provider::EntityType::AnchorFeature
+                                })
+                                .map(EntityRef::new)
+                                .collect();
+                            attr.input_derived_features = upstream
+                                .iter()
+                                .filter(|&e| {
+                                    e.entity_type == registry_provider::EntityType::DerivedFeature
+                                })
+                                .map(EntityRef::new)
+                                .collect();
+                        }
+                        _ => panic!("Data inconsistency detected"),
+                    };
+
+                    feature
+                }
+                _ => e.into(),
             }
         }
 
@@ -378,7 +495,17 @@ where
                     size,
                     offset,
                 } => if keyword.is_blank() {
-                    this.get_entry_points().await
+                    let r = this.get_entry_points().await;
+                    match r {
+                        Ok(entities) => {
+                            let mut es: Vec<Entity> = vec![];
+                            for e in entities {
+                                es.push(fill_entity(this, e).await)
+                            }
+                            Ok(es)
+                        }
+                        Err(e) => Err(e),
+                    }
                 } else {
                     search_entities(
                         this,
@@ -396,14 +523,25 @@ where
                         .collect::<Vec<String>>()
                 })
                 .into(),
-                FeathrApiRequest::GetProject { id_or_name } => this
-                    .get_entity_by_id_or_qualified_name(&id_or_name)
-                    .await
-                    .into(),
+                FeathrApiRequest::GetProject { id_or_name } => {
+                    match this.get_entity_by_id_or_qualified_name(&id_or_name).await {
+                        Ok(e) => fill_entity(this, e).await.into(),
+                        Err(e) => e.into(),
+                    }
+                }
                 FeathrApiRequest::GetProjectLineage { id_or_name } => {
                     debug!("Project name: {}", id_or_name);
 
-                    this.get_project(&id_or_name).await.into()
+                    match this.get_project(&id_or_name).await {
+                        Ok((entities, edges)) => {
+                            let mut es: Vec<Entity> = vec![];
+                            for e in entities {
+                                es.push(fill_entity(this, e).await)
+                            }
+                            (es, edges).into()
+                        }
+                        Err(e) => e.into(),
+                    }
                 }
                 FeathrApiRequest::GetProjectFeatures {
                     project_id_or_name,
@@ -453,7 +591,10 @@ where
                     id_or_name,
                 } => {
                     let (_, source_id) = get_child_id(this, project_id_or_name, id_or_name).await?;
-                    this.get_entity(source_id).await.into()
+                    match this.get_entity(source_id).await {
+                        Ok(e) => fill_entity(this, e).await.into(),
+                        Err(e) => e.into(),
+                    }
                 }
                 FeathrApiRequest::CreateProjectDataSource {
                     project_id_or_name,
@@ -493,7 +634,10 @@ where
                     id_or_name,
                 } => {
                     let (_, anchor_id) = get_child_id(this, project_id_or_name, id_or_name).await?;
-                    this.get_entity(anchor_id).await.into()
+                    match this.get_entity(anchor_id).await {
+                        Ok(e) => fill_entity(this, e).await.into(),
+                        Err(e) => e.into(),
+                    }
                 }
                 FeathrApiRequest::CreateProjectAnchor {
                     project_id_or_name,
@@ -604,7 +748,7 @@ where
                         .bfs(id, registry_provider::EdgeType::Produces, 100)
                         .await
                         .map_api_error()?;
-                    Ok((
+                    (
                         up_entities
                             .into_iter()
                             .chain(down_entities.into_iter())
@@ -613,8 +757,8 @@ where
                             .into_iter()
                             .chain(down_edges.into_iter())
                             .collect::<Vec<_>>(),
-                    ))
-                    .into()
+                    )
+                        .into()
                 }
                 FeathrApiRequest::BatchLoad { entities, edges } => {
                     this.load_data(entities, edges).await.into()

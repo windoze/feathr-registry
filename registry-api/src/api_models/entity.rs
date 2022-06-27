@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 use poem_openapi::{Enum, Object};
 use registry_provider::{EntityProperty, EdgeProperty};
@@ -99,6 +100,21 @@ pub struct EntityRef {
     unique_attributes: HashMap<String, String>,
 }
 
+impl EntityRef {
+    pub fn new<Prop>(e: &registry_provider::Entity<Prop>) -> Self
+    where
+        Prop: Clone + Debug + PartialEq + Eq,
+    {
+        Self {
+            guid: e.id.to_string(),
+            type_name: e.entity_type.get_name().to_string(),
+            unique_attributes: [("qualifiedName".to_string(), e.qualified_name.clone())]
+                .into_iter()
+                .collect(),
+        }
+    }
+}
+
 impl From<registry_provider::EntityRef> for EntityRef {
     fn from(v: registry_provider::EntityRef) -> Self {
         Self {
@@ -134,6 +150,19 @@ impl From<(Vec<registry_provider::Entity<EntityProperty>>, Vec<registry_provider
         let guid_entity_map: HashMap<String, Entity> = entities
             .into_iter()
             .map(|e| (e.id.to_string(), e.into()))
+            .collect();
+        Self {
+            guid_entity_map,
+            relations: edges.into_iter().map(|e| e.properties.into()).collect(),
+        }
+    }
+}
+
+impl From<(Vec<Entity>, Vec<registry_provider::Edge<EdgeProperty>>)> for EntityLineage {
+    fn from((entities, edges): (Vec<Entity>, Vec<registry_provider::Edge<EdgeProperty>>)) -> Self {
+        let guid_entity_map: HashMap<String, Entity> = entities
+            .into_iter()
+            .map(|e| (e.guid.clone(), e))
             .collect();
         Self {
             guid_entity_map,

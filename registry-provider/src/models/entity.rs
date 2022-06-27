@@ -23,6 +23,19 @@ pub enum EntityType {
 }
 
 impl EntityType {
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            EntityType::Project => "feathr_workspace_v1",
+            EntityType::Source => "feathr_source_v1",
+            EntityType::Anchor => "feathr_anchor_v1",
+            EntityType::AnchorFeature => "feathr_anchor_feature_v1",
+            EntityType::DerivedFeature => "feathr_derived_feature_v1",
+            EntityType::Unknown => panic!("Unknown Entity Type"),
+        }
+    }
+}
+
+impl EntityType {
     pub fn is_entry_point(self) -> bool {
         matches!(self, EntityType::Project)
     }
