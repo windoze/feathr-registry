@@ -3,13 +3,13 @@ use std::{fmt::Debug, collections::HashSet};
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::{Entity, EdgePropMutator, ToDocString, EntityPropMutator, RegistryError, EdgeType, Edge, EntityType, ProjectDef, SourceDef, AnchorDef, AnchorFeatureDef, DerivedFeatureDef, ContentEq};
+use crate::{Entity, EdgePropMutator, ToDocString, EntityPropMutator, RegistryError, EdgeType, Edge, EntityType, ProjectDef, SourceDef, AnchorDef, AnchorFeatureDef, DerivedFeatureDef};
 
 #[async_trait]
 pub trait RegistryProvider<EntityProp, EdgeProp> : Send + Sync
 where
     // Self: Sized + Send + Sync,
-    EntityProp: Clone + Debug + PartialEq + Eq + ContentEq + EntityPropMutator + ToDocString + Send + Sync,
+    EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
     EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     /**

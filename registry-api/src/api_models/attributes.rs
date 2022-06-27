@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use common_utils::FlippedOptionResult;
 use poem_openapi::{Enum, Object, Union};
 use registry_provider::EdgeProperty;
 use serde::{Deserialize, Serialize};
@@ -141,10 +140,10 @@ impl From<registry_provider::ProjectAttributes> for ProjectAttributes {
         Self {
             qualified_name: v.qualified_name,
             name: v.name,
-            anchors: v.anchors.into_iter().map(|e| e.into()).collect(),
-            sources: v.sources.into_iter().map(|e| e.into()).collect(),
-            anchor_features: v.anchor_features.into_iter().map(|e| e.into()).collect(),
-            derived_features: v.derived_features.into_iter().map(|e| e.into()).collect(),
+            anchors: Default::default(),
+            sources: Default::default(),
+            anchor_features: Default::default(),
+            derived_features: Default::default(),
             tags: v.tags,
         }
     }
@@ -157,26 +156,6 @@ impl TryInto<registry_provider::ProjectAttributes> for ProjectAttributes {
         Ok(registry_provider::ProjectAttributes {
             qualified_name: self.qualified_name,
             name: self.name,
-            anchors: self
-                .anchors
-                .into_iter()
-                .map(|e| e.try_into())
-                .collect::<Result<_, _>>()?,
-            sources: self
-                .sources
-                .into_iter()
-                .map(|e| e.try_into())
-                .collect::<Result<_, _>>()?,
-            anchor_features: self
-                .anchor_features
-                .into_iter()
-                .map(|e| e.try_into())
-                .collect::<Result<_, _>>()?,
-            derived_features: self
-                .derived_features
-                .into_iter()
-                .map(|e| e.try_into())
-                .collect::<Result<_, _>>()?,
             tags: self.tags,
         })
     }
@@ -264,8 +243,8 @@ impl From<registry_provider::AnchorAttributes> for AnchorAttributes {
         Self {
             qualified_name: v.qualified_name,
             name: v.name,
-            features: v.features.into_iter().map(|e| e.into()).collect(),
-            source: v.source.map(|e| e.into()),
+            features: Default::default(),
+            source: None,
             tags: v.tags,
         }
     }
@@ -278,12 +257,6 @@ impl TryInto<registry_provider::AnchorAttributes> for AnchorAttributes {
         Ok(registry_provider::AnchorAttributes {
             qualified_name: self.qualified_name,
             name: self.name,
-            features: self
-                .features
-                .into_iter()
-                .map(|e| e.try_into())
-                .collect::<Result<_, _>>()?,
-            source: self.source.map(|e| e.try_into()).flip()?,
             tags: self.tags,
         })
     }
@@ -337,16 +310,8 @@ impl From<registry_provider::DerivedFeatureAttributes> for DerivedFeatureAttribu
             type_: v.type_.into(),
             transformation: v.transformation.into(),
             key: v.key.into_iter().map(|e| e.into()).collect(),
-            input_anchor_features: v
-                .input_anchor_features
-                .into_iter()
-                .map(|e| e.into())
-                .collect(),
-            input_derived_features: v
-                .input_derived_features
-                .into_iter()
-                .map(|e| e.into())
-                .collect(),
+            input_anchor_features: Default::default(),
+            input_derived_features: Default::default(),
             tags: v.tags,
         }
     }

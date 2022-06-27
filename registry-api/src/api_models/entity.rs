@@ -5,9 +5,7 @@ use poem_openapi::{Enum, Object};
 use registry_provider::{EntityProperty, EdgeProperty};
 use serde::{Deserialize, Serialize};
 
-use crate::error::ApiError;
-
-use super::{parse_uuid, EntityAttributes, Relationship};
+use super::{EntityAttributes, Relationship};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Enum)]
 pub enum EntityType {
@@ -112,28 +110,6 @@ impl EntityRef {
                 .into_iter()
                 .collect(),
         }
-    }
-}
-
-impl From<registry_provider::EntityRef> for EntityRef {
-    fn from(v: registry_provider::EntityRef) -> Self {
-        Self {
-            guid: v.guid.to_string(),
-            type_name: v.type_name,
-            unique_attributes: v.unique_attributes,
-        }
-    }
-}
-
-impl TryInto<registry_provider::EntityRef> for EntityRef {
-    type Error = ApiError;
-
-    fn try_into(self) -> Result<registry_provider::EntityRef, Self::Error> {
-        Ok(registry_provider::EntityRef {
-            guid: parse_uuid(&self.guid)?,
-            type_name: self.type_name,
-            unique_attributes: self.unique_attributes,
-        })
     }
 }
 

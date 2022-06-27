@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    AnchorDef, AnchorFeatureDef, DerivedFeatureDef, EdgeType, ProjectDef, RegistryError, SourceDef,
+    AnchorDef, AnchorFeatureDef, DerivedFeatureDef, ProjectDef, RegistryError, SourceDef,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -45,10 +45,6 @@ impl Default for EntityType {
     fn default() -> Self {
         Self::Unknown
     }
-}
-
-pub trait ContentEq {
-    fn content_eq(&self, other: &Self) -> bool;
 }
 
 #[derive(Clone, Debug, Eq)]
@@ -236,30 +232,4 @@ where
     fn new_anchor(definition: &AnchorDef) -> Result<Self, RegistryError>;
     fn new_anchor_feature(definition: &AnchorFeatureDef) -> Result<Self, RegistryError>;
     fn new_derived_feature(definition: &DerivedFeatureDef) -> Result<Self, RegistryError>;
-
-    fn clear(&mut self) {}
-
-    /**
-     * Function will be called when 2 entities are connected.
-     * EntityProp may need to update internal state accordingly.
-     */
-    fn connect(
-        from: &mut Entity<Self>,
-        from_id: Uuid,
-        to: &mut Entity<Self>,
-        to_id: Uuid,
-        edge_type: EdgeType,
-    );
-
-    /**
-     * Function will be called when 2 entities are disconnected.
-     * EntityProp may need to update internal state accordingly.
-     */
-    fn disconnect(
-        from: &mut Entity<Self>,
-        from_id: Uuid,
-        to: &mut Entity<Self>,
-        to_id: Uuid,
-        edge_type: EdgeType,
-    );
 }

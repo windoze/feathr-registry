@@ -10,19 +10,20 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-pub use database::{load_registry, attach_storage, load_content};
+pub use database::{attach_storage, load_content, load_registry};
 pub use db_registry::Registry;
+use log::debug;
 use registry_provider::{
     AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgePropMutator, EdgeType, Entity,
     EntityPropMutator, EntityType, ProjectDef, RegistryError, RegistryProvider, SourceDef,
-    ToDocString, ContentEq,
+    ToDocString,
 };
 use uuid::Uuid;
 
 #[async_trait]
 impl<EntityProp, EdgeProp> RegistryProvider<EntityProp, EdgeProp> for Registry<EntityProp, EdgeProp>
 where
-    EntityProp: Clone + Debug + PartialEq + Eq + ContentEq + EntityPropMutator + ToDocString + Send + Sync,
+    EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
     EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     /**
@@ -33,11 +34,8 @@ where
         entities: Vec<Entity<EntityProp>>,
         edges: Vec<Edge<EdgeProp>>,
     ) -> Result<(), RegistryError> {
-        self.batch_load(
-            entities.into_iter(),
-            edges.into_iter(),
-        )
-        .await
+        self.batch_load(entities.into_iter(), edges.into_iter())
+            .await
     }
 
     /**
@@ -169,10 +167,7 @@ where
     }
 
     // Create new project
-    async fn new_project(
-        &mut self,
-        definition: &ProjectDef,
-    ) -> Result<Uuid, RegistryError> {
+    async fn new_project(&mut self, definition: &ProjectDef) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
         let prop = EntityProp::new_project(definition)?;
         self.insert_entity(
@@ -219,7 +214,37 @@ where
         project_id: Uuid,
         definition: &AnchorDef,
     ) -> Result<Uuid, RegistryError> {
-        // TODO: Pre-flight validation
+        if let Ok(e) = self
+            .get_entity_by_qualified_name(&definition.qualified_name)
+            .await
+        {
+            debug!(
+                "Found existing entity {}, qualified_name '{}'",
+                e.id, e.qualified_name
+            );
+            // We only check source for conflicts as the anchor is always empty when it's just created
+            let source = self
+                .get_neighbors(e.id, EdgeType::Consumes)
+                .await
+                .expect("Data inconsistency detected");
+            // An anchor has exactly one source
+            assert!(source.len() == 1, "Data inconsistency detected");
+            if definition.source_id != source[0].id {
+                debug!(
+                    "Existing anchor {} has different source id {}",
+                    e.id, source[0].id
+                );
+                return Err(RegistryError::EntityNameExists(
+                    definition.qualified_name.to_string(),
+                ));
+            }
+        }
+
+        if self.get_entity_by_id(definition.source_id).is_none() {
+            debug!("Source {} not found, cannot create anchor", definition.source_id);
+            return Err(RegistryError::EntityNotFound(definition.source_id.to_string()));
+        }
+
         let prop = EntityProp::new_anchor(definition)?;
         let anchor_id = self
             .insert_entity(
@@ -301,7 +326,46 @@ where
         project_id: Uuid,
         definition: &DerivedFeatureDef,
     ) -> Result<Uuid, RegistryError> {
-        // TODO: Pre-flight validation
+        let input: HashSet<Uuid> = definition
+            .input_anchor_features
+            .iter()
+            .chain(definition.input_derived_features.iter())
+            .copied()
+            .collect();
+        if let Ok(e) = self
+            .get_entity_by_qualified_name(&definition.qualified_name)
+            .await
+        {
+            debug!(
+                "Found existing entity {}, qualified_name '{}'",
+                e.id, e.qualified_name
+            );
+            // Check if input features in the def are same as existing one
+            let upstream: HashSet<Uuid> = self
+                .get_neighbors(e.id, EdgeType::Consumes)
+                .await
+                .expect("Data inconsistency detected")
+                .into_iter()
+                .map(|e| e.id)
+                .collect();
+            if upstream != input {
+                debug!(
+                    "Existing derived feature {} has different input features {:?}",
+                    definition.qualified_name, upstream
+                );
+                return Err(RegistryError::EntityNameExists(
+                    definition.qualified_name.to_owned(),
+                ));
+            }
+        }
+
+        for id in input {
+            if self.get_entity_by_id(id).is_none() {
+                debug!("Input feature {} not found, cannot create derived feature {}", id, definition.qualified_name);
+                return Err(RegistryError::EntityNotFound(id.to_string()));
+            }
+        }
+
         let prop = EntityProp::new_derived_feature(definition)?;
         let feature_id = self
             .insert_entity(

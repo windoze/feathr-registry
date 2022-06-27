@@ -4,7 +4,6 @@ members = [
     "common-utils",
     "feathr-registry",
     "registry-provider",
-    "atlas-provider",
     "sql-provider",
     "registry-api",
     "registry-cli",

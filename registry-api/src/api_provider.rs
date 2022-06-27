@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     AnchorDef, AnchorFeatureDef, ApiError, DerivedFeatureDef, Entities, Entity, EntityAttributes,
-    EntityLineage, EntityRef, IntoApiResult, ProjectDef, SourceDef,
+    EntityLineage, IntoApiResult, ProjectDef, SourceDef, EntityRef,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -437,11 +437,11 @@ where
                         .await
                         .expect("Data inconsistency detected")
                         .into_iter()
-                        .map(|e| registry_provider::EntityRef::new(&e).into())
+                        .map(|e| EntityRef::new(&e))
                         .collect();
                     match &mut anchor.attributes {
                         EntityAttributes::Anchor(attr) => {
-                            attr.source = Some(registry_provider::EntityRef::new(&source).into());
+                            attr.source = Some(EntityRef::new(&source));
                             attr.features = features;
                         }
                         _ => panic!("Data inconsistency detected"),

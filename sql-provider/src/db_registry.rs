@@ -176,8 +176,7 @@ where
 #[allow(dead_code)]
 impl<EntityProp, EdgeProp> Registry<EntityProp, EdgeProp>
 where
-    EntityProp:
-        Clone + Debug + PartialEq + Eq + ContentEq + EntityPropMutator + ToDocString + Send + Sync,
+    EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
     EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     pub(crate) fn new() -> Self {
@@ -493,7 +492,7 @@ where
             let e = self
                 .get_entity_by_qualified_name(&qualified_name.to_string())
                 .await?;
-            if e.properties.content_eq(&properties) {
+            if e.properties == properties {
                 // Creating an exactly same entity, just return existing id without reporting error
                 return Ok(e.id);
             }
@@ -536,7 +535,7 @@ where
             let e = self
                 .get_entity_by_qualified_name(&qualified_name.to_string())
                 .await?;
-            if e.properties.content_eq(&properties) {
+            if e.properties == properties {
                 // Creating an exactly same entity, just return existing id without reporting error
                 return Ok(e.id);
             }
@@ -578,17 +577,13 @@ where
             // Call entity#disconnect and update node weights in the graph accordingly
             for edge in &edges {
                 let (from_idx, to_idx) = self.graph.edge_endpoints(edge.to_owned()).unwrap();
-                let et = self.graph.edge_weight(edge.to_owned()).unwrap().edge_type;
-                let mut from = self.graph.node_weight(from_idx).unwrap().to_owned();
-                let mut to = self
+                let from = self.graph.node_weight(from_idx).unwrap().to_owned();
+                let to = self
                     .graph
                     .node_weight(to_idx)
                     .unwrap()
                     .to_owned()
                     .to_owned();
-                let from_id = from.id;
-                let to_id = to.id;
-                EntityProp::disconnect(&mut from, from_id, &mut to, to_id, et);
                 if let Some(w) = self.graph.node_weight_mut(from_idx) {
                     w.properties = from.properties
                 }
@@ -709,9 +704,8 @@ where
         entity_type: EntityType,
         name: String,
         qualified_name: String,
-        mut properties: EntityProp,
+        properties: EntityProp,
     ) -> Result<NodeIndex, RegistryError> {
-        properties.clear();
         let entity = Entity {
             id,
             entity_type,
@@ -742,9 +736,8 @@ where
         to_uuid: Uuid,
         properties: EdgeProp,
     ) -> EdgeIndex {
-        let mut from = self.graph.node_weight(from_idx).unwrap().to_owned();
-        let mut to = self.graph.node_weight(to_idx).unwrap().to_owned();
-        EntityProp::connect(&mut from, from_uuid, &mut to, to_uuid, edge_type);
+        let from = self.graph.node_weight(from_idx).unwrap().to_owned();
+        let to = self.graph.node_weight(to_idx).unwrap().to_owned();
         if let Some(w) = self.graph.node_weight_mut(from_idx) {
             w.containers = from.containers;
             w.properties = from.properties
@@ -789,12 +782,6 @@ mod tests {
         }
     }
 
-    impl ContentEq for DummyEntityProp {
-        fn content_eq(&self, _: &Self) -> bool {
-            false
-        }
-    }
-
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct DummyEdgeProp;
 
@@ -817,32 +804,6 @@ mod tests {
 
         fn new_derived_feature(_definition: &DerivedFeatureDef) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
-        }
-
-        fn connect(
-            from: &mut Entity<Self>,
-            _from_id: Uuid,
-            to: &mut Entity<Self>,
-            _to_id: Uuid,
-            edge_type: EdgeType,
-        ) {
-            debug!(
-                "Connecting: '{}' '{:?}' '{}'",
-                from.name, edge_type, to.name
-            );
-        }
-
-        fn disconnect(
-            from: &mut Entity<Self>,
-            _from_id: Uuid,
-            to: &mut Entity<Self>,
-            _to_id: Uuid,
-            edge_type: EdgeType,
-        ) {
-            debug!(
-                "Disconnecting: '{}' '{:?}' '{}'",
-                from.name, edge_type, to.name
-            );
         }
     }
 
