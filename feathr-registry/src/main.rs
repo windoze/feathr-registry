@@ -168,30 +168,31 @@ async fn main() -> Result<(), anyhow::Error> {
     let ui_v2 = api_service_v2.swagger_ui();
     let spec_v2 = api_service_v2.spec();
 
+    let api_route = Route::new()
+        .nest("/v1", api_service_v1)
+        .nest("/v2", api_service_v2)
+        .with(Tracing)
+        .with(RaftSequencer::new(app.store.clone()))
+        .with(Cors::new());
+    
+    let docs_route = Route::new()
+        .nest("/v1", ui_v1)
+        .nest("/v2", ui_v2);
+    
+    let spec_route = Route::new()
+    .at("/v1", poem::endpoint::make_sync(move |_| spec_v1.clone()))
+    .at("/v2", poem::endpoint::make_sync(move |_| spec_v2.clone()));
+
     let route = management_routes(raft_routes(Route::new()))
-        .nest(
-            format!("{}/v1", api_base),
-            api_service_v1
-                .with(Tracing)
-                .with(RaftSequencer::new(app.store.clone()))
-                .with(Cors::new()),
-        )
-        .nest("/v1/docs", ui_v1)
-        .at("/v1/spec", poem::endpoint::make_sync(move |_| spec_v1.clone()))
-        .nest(
-            format!("{}/v2", api_base),
-            api_service_v2
-                .with(Tracing)
-                .with(RaftSequencer::new(app.store.clone()))
-                .with(Cors::new()),
-        )
-        .nest("/v2/docs", ui_v2)
-        .at("/v2/spec", poem::endpoint::make_sync(move |_| spec_v2.clone()))
+        .nest("spec", spec_route)
+        .nest("docs", docs_route)
+        .nest(api_base, api_route,)
         .nest(
             "/",
             spa_endpoint::SpaEndpoint::new("./static-files", "index.html"),
         )
         .data(app.clone());
+
     let svc_task = async {
         Server::new(TcpListener::bind(
             options.http_addr.trim_start_matches("http://"),
