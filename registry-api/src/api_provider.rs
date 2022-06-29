@@ -359,7 +359,7 @@ where
             T: RegistryProvider<EntityProperty, EdgeProperty>,
         {
             match &mut e.properties.attributes {
-                registry_provider::Attributes::Project(_) => {
+                registry_provider::Attributes::Project => {
                     let project_id = e.id;
                     let mut project: Entity = e.into();
                     // Contents
@@ -397,7 +397,7 @@ where
                     };
                     project
                 }
-                registry_provider::Attributes::Anchor(_) => {
+                registry_provider::Attributes::Anchor => {
                     let anchor_id = e.id;
                     let mut anchor: Entity = e.into();
                     // Source
@@ -695,9 +695,10 @@ where
                         .await
                         .into()
                 }
-                FeathrApiRequest::GetFeature { id_or_name } => {
-                    this.get_entity_by_id_or_qualified_name(&id_or_name).into()
-                }
+                FeathrApiRequest::GetFeature { id_or_name } => this
+                    .get_entity_by_id_or_qualified_name(&id_or_name)
+                    .map(|e| fill_entity(this, e))
+                    .into(),
                 FeathrApiRequest::GetFeatureLineage { id_or_name } => {
                     debug!("Feature name: {}", id_or_name);
                     let id = get_id(this, id_or_name)?;

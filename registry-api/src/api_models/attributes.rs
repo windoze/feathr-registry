@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
 use poem_openapi::{Enum, Object, Union};
-use registry_provider::EdgeProperty;
 use serde::{Deserialize, Serialize};
 
-use crate::error::ApiError;
-
-use super::{parse_uuid, EntityRef, FeatureTransformation, FeatureType, Relationship, TypedKey};
+use super::{EntityRef, FeatureTransformation, FeatureType, TypedKey};
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Enum)]
@@ -111,18 +108,6 @@ impl Into<registry_provider::ValueType> for ValueType {
     }
 }
 
-impl TryInto<EdgeProperty> for Relationship {
-    type Error = ApiError;
-
-    fn try_into(self) -> Result<EdgeProperty, Self::Error> {
-        Ok(EdgeProperty {
-            edge_type: self.edge_type.into(),
-            from: parse_uuid(&self.from)?,
-            to: parse_uuid(&self.to)?,
-        })
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct ProjectAttributes {
@@ -133,32 +118,6 @@ pub struct ProjectAttributes {
     pub anchor_features: Vec<EntityRef>,
     pub derived_features: Vec<EntityRef>,
     pub tags: HashMap<String, String>,
-}
-
-impl From<registry_provider::ProjectAttributes> for ProjectAttributes {
-    fn from(v: registry_provider::ProjectAttributes) -> Self {
-        Self {
-            qualified_name: v.qualified_name,
-            name: v.name,
-            anchors: Default::default(),
-            sources: Default::default(),
-            anchor_features: Default::default(),
-            derived_features: Default::default(),
-            tags: v.tags,
-        }
-    }
-}
-
-impl TryInto<registry_provider::ProjectAttributes> for ProjectAttributes {
-    type Error = ApiError;
-
-    fn try_into(self) -> Result<registry_provider::ProjectAttributes, Self::Error> {
-        Ok(registry_provider::ProjectAttributes {
-            qualified_name: self.qualified_name,
-            name: self.name,
-            tags: self.tags,
-        })
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
@@ -187,46 +146,6 @@ pub struct SourceAttributes {
     pub tags: HashMap<String, String>,
 }
 
-impl From<registry_provider::SourceAttributes> for SourceAttributes {
-    fn from(v: registry_provider::SourceAttributes) -> Self {
-        Self {
-            qualified_name: v.qualified_name,
-            name: v.name,
-            path: v.path,
-            url: v.url,
-            dbtable: v.dbtable,
-            query: v.query,
-            auth: v.auth,
-            preprocessing: v.preprocessing,
-            event_timestamp_column: v.event_timestamp_column,
-            timestamp_format: v.timestamp_format,
-            type_: v.type_,
-            tags: v.tags,
-        }
-    }
-}
-
-impl TryInto<registry_provider::SourceAttributes> for SourceAttributes {
-    type Error = ApiError;
-
-    fn try_into(self) -> Result<registry_provider::SourceAttributes, Self::Error> {
-        Ok(registry_provider::SourceAttributes {
-            qualified_name: self.qualified_name,
-            name: self.name,
-            path: self.path,
-            url: self.url,
-            dbtable: self.dbtable,
-            query: self.query,
-            auth: self.auth,
-            preprocessing: self.preprocessing,
-            event_timestamp_column: self.event_timestamp_column,
-            timestamp_format: self.timestamp_format,
-            type_: self.type_,
-            tags: self.tags,
-        })
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
 pub struct AnchorAttributes {
@@ -236,30 +155,6 @@ pub struct AnchorAttributes {
     #[oai(skip_serializing_if = "Option::is_none")]
     pub source: Option<EntityRef>,
     pub tags: HashMap<String, String>,
-}
-
-impl From<registry_provider::AnchorAttributes> for AnchorAttributes {
-    fn from(v: registry_provider::AnchorAttributes) -> Self {
-        Self {
-            qualified_name: v.qualified_name,
-            name: v.name,
-            features: Default::default(),
-            source: None,
-            tags: v.tags,
-        }
-    }
-}
-
-impl TryInto<registry_provider::AnchorAttributes> for AnchorAttributes {
-    type Error = ApiError;
-
-    fn try_into(self) -> Result<registry_provider::AnchorAttributes, Self::Error> {
-        Ok(registry_provider::AnchorAttributes {
-            qualified_name: self.qualified_name,
-            name: self.name,
-            tags: self.tags,
-        })
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
@@ -272,19 +167,6 @@ pub struct AnchorFeatureAttributes {
     pub transformation: FeatureTransformation,
     pub key: Vec<TypedKey>,
     pub tags: HashMap<String, String>,
-}
-
-impl From<registry_provider::AnchorFeatureAttributes> for AnchorFeatureAttributes {
-    fn from(v: registry_provider::AnchorFeatureAttributes) -> Self {
-        Self {
-            qualified_name: v.qualified_name,
-            name: v.name,
-            type_: v.type_.into(),
-            transformation: v.transformation.into(),
-            key: v.key.into_iter().map(|e| e.into()).collect(),
-            tags: v.tags,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
@@ -302,21 +184,6 @@ pub struct DerivedFeatureAttributes {
     pub tags: HashMap<String, String>,
 }
 
-impl From<registry_provider::DerivedFeatureAttributes> for DerivedFeatureAttributes {
-    fn from(v: registry_provider::DerivedFeatureAttributes) -> Self {
-        Self {
-            qualified_name: v.qualified_name,
-            name: v.name,
-            type_: v.type_.into(),
-            transformation: v.transformation.into(),
-            key: v.key.into_iter().map(|e| e.into()).collect(),
-            input_anchor_features: Default::default(),
-            input_derived_features: Default::default(),
-            tags: v.tags,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Union)]
 pub enum EntityAttributes {
     Project(ProjectAttributes),
@@ -326,14 +193,57 @@ pub enum EntityAttributes {
     DerivedFeature(DerivedFeatureAttributes),
 }
 
-impl From<registry_provider::Attributes> for EntityAttributes {
-    fn from(v: registry_provider::Attributes) -> Self {
-        match v {
-            registry_provider::Attributes::AnchorFeature(v) => Self::AnchorFeature(v.into()),
-            registry_provider::Attributes::DerivedFeature(v) => Self::DerivedFeature(v.into()),
-            registry_provider::Attributes::Anchor(v) => Self::Anchor(v.into()),
-            registry_provider::Attributes::Source(v) => Self::Source(v.into()),
-            registry_provider::Attributes::Project(v) => Self::Project(v.into()),
+impl From<registry_provider::EntityProperty> for EntityAttributes {
+    fn from(v: registry_provider::EntityProperty) -> Self {
+        match v.attributes {
+            registry_provider::Attributes::AnchorFeature(attr) => Self::AnchorFeature(AnchorFeatureAttributes {
+                qualified_name: v.qualified_name,
+                name: v.name,
+                tags: v.tags,
+                type_: attr.type_.into(),
+                transformation: attr.transformation.into(),
+                key: attr.key.into_iter().map(|e| e.into()).collect(),
+            }),
+            registry_provider::Attributes::DerivedFeature(attr) => Self::DerivedFeature(DerivedFeatureAttributes {
+                qualified_name: v.qualified_name,
+                name: v.name,
+                tags: v.tags,
+                type_: attr.type_.into(),
+                transformation: attr.transformation.into(),
+                key: attr.key.into_iter().map(|e| e.into()).collect(),
+                input_anchor_features: Default::default(),
+                input_derived_features: Default::default(),
+            }),
+            registry_provider::Attributes::Anchor => Self::Anchor(AnchorAttributes {
+                qualified_name: v.qualified_name,
+                name: v.name,
+                tags: v.tags,
+                features: Default::default(),
+                source: None,
+            }),
+            registry_provider::Attributes::Source(attr) => Self::Source(SourceAttributes {
+                qualified_name: v.qualified_name,
+                name: v.name,
+                tags: v.tags,
+                path: attr.path,
+                url: attr.url,
+                dbtable: attr.dbtable,
+                query: attr.query,
+                auth: attr.auth,
+                preprocessing: attr.preprocessing,
+                event_timestamp_column: attr.event_timestamp_column,
+                timestamp_format: attr.timestamp_format,
+                type_: attr.type_,
+                }),
+            registry_provider::Attributes::Project => Self::Project(ProjectAttributes {
+                qualified_name: v.qualified_name,
+                name: v.name,
+                tags: v.tags,
+                anchors: Default::default(),
+                sources: Default::default(),
+                anchor_features: Default::default(),
+                derived_features: Default::default(),
+            }),
         }
     }
 }

@@ -1,15 +1,7 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
 use serde::{Deserialize, Serialize};
-
-fn is_default<T>(v: &T) -> bool
-where
-    T: Default + Eq,
-{
-    v == &T::default()
-}
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -130,52 +122,23 @@ pub enum FeatureTransformation {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnchorFeatureAttributes {
-    pub qualified_name: String,
-    pub name: String,
     #[serde(rename = "type")]
     pub type_: FeatureType,
     pub transformation: FeatureTransformation,
     pub key: Vec<TypedKey>,
-    #[serde(skip_serializing_if = "is_default", default)]
-    pub tags: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DerivedFeatureAttributes {
-    #[serde(rename = "qualifiedName")]
-    pub qualified_name: String,
-    pub name: String,
     #[serde(rename = "type")]
     pub type_: FeatureType,
     pub transformation: FeatureTransformation,
     pub key: Vec<TypedKey>,
-    #[serde(skip_serializing_if = "is_default", default)]
-    pub tags: HashMap<String, String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AnchorAttributes {
-    #[serde(rename = "qualifiedName")]
-    pub qualified_name: String,
-    pub name: String,
-    #[serde(skip_serializing_if = "is_default", default)]
-    pub tags: HashMap<String, String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProjectAttributes {
-    #[serde(rename = "qualifiedName")]
-    pub qualified_name: String,
-    pub name: String,
-    #[serde(skip_serializing_if = "is_default", default)]
-    pub tags: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceAttributes {
-    pub qualified_name: String,
-    pub name: String,
     #[serde(rename = "type")]
     pub type_: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
@@ -194,8 +157,6 @@ pub struct SourceAttributes {
     pub event_timestamp_column: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub timestamp_format: Option<String>,
-    #[serde(skip_serializing_if = "is_default", default)]
-    pub tags: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -206,9 +167,9 @@ pub enum Attributes {
     #[serde(rename = "feathr_derived_feature_v1")]
     DerivedFeature(DerivedFeatureAttributes),
     #[serde(rename = "feathr_anchor_v1")]
-    Anchor(AnchorAttributes),
+    Anchor,
     #[serde(rename = "feathr_source_v1")]
     Source(SourceAttributes),
     #[serde(rename = "feathr_workspace_v1")]
-    Project(ProjectAttributes),
+    Project,
 }

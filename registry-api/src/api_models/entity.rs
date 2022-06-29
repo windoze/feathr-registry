@@ -43,8 +43,6 @@ pub struct Entity {
     pub guid: String,
     pub name: String,
     pub qualified_name: String,
-    #[oai(rename = "lastModifiedTS")]
-    pub last_modified_ts: String,
     #[oai(rename = "typeName")]
     pub entity_type: EntityType,
     pub status: String,
@@ -60,11 +58,10 @@ impl From<registry_provider::Entity<EntityProperty>> for Entity {
             name: v.name,
             qualified_name: v.qualified_name,
             entity_type: v.entity_type.into(),
-            last_modified_ts: v.properties.last_modified_ts,
             status: format!("{:?}", v.properties.status),
-            display_text: v.properties.display_text,
-            labels: v.properties.labels,
-            attributes: v.properties.attributes.into(),
+            display_text: v.properties.display_text.clone(),
+            labels: v.properties.labels.clone(),
+            attributes: v.properties.into(),
         }
     }
 }
