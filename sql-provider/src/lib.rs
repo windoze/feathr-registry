@@ -14,7 +14,7 @@ pub use database::{attach_storage, load_content, load_registry};
 pub use db_registry::Registry;
 use log::debug;
 use registry_provider::{
-    AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgeType, Entity,
+    extract_version, AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgeType, Entity,
     EntityPropMutator, EntityType, ProjectDef, RegistryError, RegistryProvider, SourceDef,
     ToDocString,
 };
@@ -65,7 +65,8 @@ where
         &self,
         qualified_name: &str,
     ) -> Result<Entity<EntityProp>, RegistryError> {
-        self.get_entity_by_name(qualified_name)
+        let (qualified_name, version) = extract_version(qualified_name);
+        self.get_entity_by_name(qualified_name, version)
             .ok_or_else(|| RegistryError::EntityNotFound(qualified_name.to_string()))
     }
 
@@ -87,8 +88,13 @@ where
      * Get entity id by its name
      */
     fn get_entity_id_by_qualified_name(&self, qualified_name: &str) -> Result<Uuid, RegistryError> {
+        let (qualified_name, version) = extract_version(qualified_name);
         self.name_id_map
             .get(qualified_name)
+            .and_then(|ids| match version {
+                Some(v) => ids.get(&v),
+                None => ids.keys().max().and_then(|v| ids.get(v)),
+            })
             .ok_or_else(|| RegistryError::EntityNotFound(qualified_name.to_string()))
             .cloned()
     }
@@ -162,18 +168,25 @@ where
     // Create new project
     async fn new_project(&mut self, definition: &ProjectDef) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_project(definition)?;
-        let project_id = self
-            .insert_entity(
-                definition.id,
-                EntityType::Project,
-                &definition.qualified_name,
-                &definition.qualified_name,
-                prop,
-            )
-            .await?;
-        self.index_entity(project_id)?;
-        Ok(project_id)
+        let mut prop = EntityProp::new_project(definition)?;
+        match self.get_all_versions(&definition.qualified_name).last() {
+            // It makes no sense to create a new version of a project
+            Some(e) => Ok(e.id),
+            None => {
+                prop.set_version(1);
+                let project_id = self
+                    .insert_entity(
+                        definition.id,
+                        EntityType::Project,
+                        &definition.qualified_name,
+                        &definition.qualified_name,
+                        prop,
+                    )
+                    .await?;
+                self.index_entity(project_id)?;
+                Ok(project_id)
+            }
+        }
     }
 
     // Create new source under specified project
@@ -183,7 +196,17 @@ where
         definition: &SourceDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_source(definition)?;
+        let mut prop = EntityProp::new_source(definition)?;
+
+        for v in self.get_all_versions(&definition.qualified_name) {
+            if v.properties == prop {
+                // Found an existing version that is same as the requested one
+                return Ok(v.id);
+            }
+        }
+
+        prop.set_version(self.get_next_version_number(&definition.qualified_name));
+
         let source_id = self
             .insert_entity(
                 definition.id,
@@ -194,11 +217,7 @@ where
             )
             .await?;
 
-        self.connect(
-            project_id,
-            source_id,
-            EdgeType::Contains,
-        )?;
+        self.connect(project_id, source_id, EdgeType::Contains)?;
 
         self.index_entity(source_id)?;
         Ok(source_id)
@@ -210,28 +229,6 @@ where
         project_id: Uuid,
         definition: &AnchorDef,
     ) -> Result<Uuid, RegistryError> {
-        if let Ok(e) = self.get_entity_by_qualified_name(&definition.qualified_name) {
-            debug!(
-                "Found existing entity {}, qualified_name '{}'",
-                e.id, e.qualified_name
-            );
-            // We only check source for conflicts as the anchor is always empty when it's just created
-            let source = self
-                .get_neighbors(e.id, EdgeType::Consumes)
-                .expect("Data inconsistency detected");
-            // An anchor has exactly one source
-            assert!(source.len() == 1, "Data inconsistency detected");
-            if definition.source_id != source[0].id {
-                debug!(
-                    "Existing anchor {} has different source id {}",
-                    e.id, source[0].id
-                );
-                return Err(RegistryError::EntityNameExists(
-                    definition.qualified_name.to_string(),
-                ));
-            }
-        }
-
         if self.get_entity_by_id(definition.source_id).is_none() {
             debug!(
                 "Source {} not found, cannot create anchor",
@@ -242,7 +239,31 @@ where
             ));
         }
 
-        let prop = EntityProp::new_anchor(definition)?;
+        if let Some(e) = self
+            .get_all_versions(&definition.qualified_name)
+            .into_iter()
+            .find(|e| {
+                debug!(
+                    "Found existing entity {}, qualified_name '{}'",
+                    e.id, e.qualified_name
+                );
+                // We only check source for conflicts as the anchor is always empty when it's just created
+                let source = self
+                    .get_neighbors(e.id, EdgeType::Consumes)
+                    .expect("Data inconsistency detected");
+                // An anchor has exactly one source
+                assert!(source.len() == 1, "Data inconsistency detected");
+                definition.source_id == source[0].id
+            })
+        {
+            // Found existing anchor with same name and source
+            return Ok(e.id);
+        }
+
+        // Create new version
+        let mut prop = EntityProp::new_anchor(definition)?;
+        prop.set_version(self.get_next_version_number(&definition.qualified_name));
+
         let anchor_id = self
             .insert_entity(
                 definition.id,
@@ -253,17 +274,9 @@ where
             )
             .await?;
 
-        self.connect(
-            project_id,
-            anchor_id,
-            EdgeType::Contains,
-        )?;
+        self.connect(project_id, anchor_id, EdgeType::Contains)?;
 
-        self.connect(
-            anchor_id,
-            definition.source_id,
-            EdgeType::Consumes,
-        )?;
+        self.connect(anchor_id, definition.source_id, EdgeType::Consumes)?;
 
         self.index_entity(anchor_id)?;
         Ok(anchor_id)
@@ -277,7 +290,26 @@ where
         definition: &AnchorFeatureDef,
     ) -> Result<Uuid, RegistryError> {
         // TODO: Pre-flight validation
-        let prop = EntityProp::new_anchor_feature(definition)?;
+        let mut prop = EntityProp::new_anchor_feature(definition)?;
+
+        if let Some(e) = self
+            .get_all_versions(&definition.qualified_name)
+            .into_iter()
+            .find(|e| {
+                debug!(
+                    "Found existing entity {}, qualified_name '{}'",
+                    e.id, e.qualified_name
+                );
+
+                // Found existing anchor feature same as the requested one
+                prop == e.properties
+            })
+        {
+            // Found existing anchor with same name and source
+            return Ok(e.id);
+        }
+
+        prop.set_version(self.get_next_version_number(&definition.qualified_name));
         let feature_id = self
             .insert_entity(
                 definition.id,
@@ -288,26 +320,14 @@ where
             )
             .await?;
 
-        self.connect(
-            project_id,
-            feature_id,
-            EdgeType::Contains,
-        )?;
+        self.connect(project_id, feature_id, EdgeType::Contains)?;
 
-        self.connect(
-            anchor_id,
-            feature_id,
-            EdgeType::Contains,
-        )?;
+        self.connect(anchor_id, feature_id, EdgeType::Contains)?;
 
         // Anchor feature also consumes source of the anchor
         let sources = self.get_neighbors(anchor_id, EdgeType::Consumes)?;
         for s in sources {
-            self.connect(
-                feature_id,
-                s.id,
-                EdgeType::Consumes,
-            )?;
+            self.connect(feature_id, s.id, EdgeType::Consumes)?;
         }
 
         self.index_entity(feature_id)?;
@@ -326,31 +346,9 @@ where
             .chain(definition.input_derived_features.iter())
             .copied()
             .collect();
-        if let Ok(e) = self.get_entity_by_qualified_name(&definition.qualified_name) {
-            debug!(
-                "Found existing entity {}, qualified_name '{}'",
-                e.id, e.qualified_name
-            );
-            // Check if input features in the def are same as existing one
-            let upstream: HashSet<Uuid> = self
-                .get_neighbors(e.id, EdgeType::Consumes)
-                .expect("Data inconsistency detected")
-                .into_iter()
-                .map(|e| e.id)
-                .collect();
-            if upstream != input {
-                debug!(
-                    "Existing derived feature {} has different input features {:?}",
-                    definition.qualified_name, upstream
-                );
-                return Err(RegistryError::EntityNameExists(
-                    definition.qualified_name.to_owned(),
-                ));
-            }
-        }
 
-        for id in input {
-            if self.get_entity_by_id(id).is_none() {
+        for id in input.iter() {
+            if self.get_entity_by_id(*id).is_none() {
                 debug!(
                     "Input feature {} not found, cannot create derived feature {}",
                     id, definition.qualified_name
@@ -359,7 +357,30 @@ where
             }
         }
 
-        let prop = EntityProp::new_derived_feature(definition)?;
+        let mut prop = EntityProp::new_derived_feature(definition)?;
+
+        if let Some(e) = self
+            .get_all_versions(&definition.qualified_name)
+            .into_iter()
+            .find(|e| {
+                debug!(
+                    "Found existing entity {}, qualified_name '{}'",
+                    e.id, e.qualified_name
+                );
+                // Check if input features in the def are same as existing one
+                let upstream: HashSet<Uuid> = self
+                    .get_neighbors(e.id, EdgeType::Consumes)
+                    .expect("Data inconsistency detected")
+                    .into_iter()
+                    .map(|e| e.id)
+                    .collect();
+                upstream == input && prop == e.properties
+            })
+        {
+            return Ok(e.id);
+        }
+
+        prop.set_version(self.get_next_version_number(&definition.qualified_name));
         let feature_id = self
             .insert_entity(
                 definition.id,
@@ -370,22 +391,14 @@ where
             )
             .await?;
 
-        self.connect(
-            project_id,
-            feature_id,
-            EdgeType::Contains,
-        )?;
+        self.connect(project_id, feature_id, EdgeType::Contains)?;
 
         for &id in definition
             .input_anchor_features
             .iter()
             .chain(definition.input_derived_features.iter())
         {
-            self.connect(
-                feature_id,
-                id,
-                EdgeType::Consumes,
-            )?;
+            self.connect(feature_id, id, EdgeType::Consumes)?;
         }
 
         self.index_entity(feature_id)?;
@@ -394,5 +407,26 @@ where
 
     async fn delete_entity(&mut self, id: Uuid) -> Result<(), RegistryError> {
         self.delete_entity_by_id(id).await
+    }
+
+    fn get_all_versions(&self, qualified_name: &str) -> Vec<Entity<EntityProp>> {
+        let (qualified_name, _version) = extract_version(qualified_name);
+        match self.name_id_map.get(qualified_name) {
+            Some(ids) => ids
+                .iter()
+                .filter_map(|(_version, id)| self.get_entity_by_id(*id))
+                .collect(),
+            None => Default::default(),
+        }
+    }
+
+    fn get_next_version_number(&self, qualified_name: &str) -> u64 {
+        let (qualified_name, _version) = extract_version(qualified_name);
+        self.name_id_map
+            .get(qualified_name)
+            .and_then(|ids| ids.keys().max())
+            .cloned()
+            .unwrap_or_default()
+            + 1
     }
 }

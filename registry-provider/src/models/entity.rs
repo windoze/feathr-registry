@@ -57,6 +57,18 @@ where
     pub name: String,
     pub qualified_name: String,
     pub properties: Prop,
+
+    pub version: u64,
+}
+
+impl<Prop> Entity<Prop>
+where
+    Prop: Clone + Debug + PartialEq + Eq + EntityPropMutator,
+{
+    pub fn set_version(&mut self, version: u64) {
+        self.version = version;
+        self.properties.set_version(version)
+    }
 }
 
 impl<Prop> PartialEq for Entity<Prop>
@@ -111,6 +123,7 @@ where
             Name,
             QualifiedName,
             Properties,
+            Version,
         }
         struct EntityVisitor<T> {
             _t: std::marker::PhantomData<T>,
@@ -145,12 +158,16 @@ where
                 let properties = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(4, &self))?;
+                let version = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(5, &self))?;
                 Ok(Entity::<Prop> {
                     id,
                     entity_type,
                     name,
                     qualified_name,
                     properties,
+                    version,
                 })
             }
 
@@ -163,6 +180,7 @@ where
                 let mut name = None;
                 let mut qualified_name = None;
                 let mut properties = None;
+                let mut version = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Id => {
@@ -195,6 +213,12 @@ where
                             }
                             properties = Some(map.next_value()?);
                         }
+                        Field::Version => {
+                            if version.is_some() {
+                                return Err(de::Error::duplicate_field("version"));
+                            }
+                            version = Some(map.next_value()?);
+                        }
                     }
                 }
                 let id = id.ok_or_else(|| de::Error::missing_field("id"))?;
@@ -205,17 +229,20 @@ where
                     qualified_name.ok_or_else(|| de::Error::missing_field("qualified_name"))?;
                 let properties =
                     properties.ok_or_else(|| de::Error::missing_field("properties"))?;
+                let version =
+                    version.ok_or_else(|| de::Error::missing_field("version"))?;
                 Ok(Entity::<Prop> {
                     id,
                     entity_type,
                     name,
                     qualified_name,
                     properties,
+                    version,
                 })
             }
         }
 
-        const FIELDS: &[&str] = &["id", "entity_type", "name", "qualified_name", "properties"];
+        const FIELDS: &[&str] = &["id", "entity_type", "name", "qualified_name", "properties", "version"];
         deserializer.deserialize_struct("Entity", FIELDS, EntityVisitor::<Prop> { _t: PhantomData })
     }
 }
@@ -229,4 +256,6 @@ where
     fn new_anchor(definition: &AnchorDef) -> Result<Self, RegistryError>;
     fn new_anchor_feature(definition: &AnchorFeatureDef) -> Result<Self, RegistryError>;
     fn new_derived_feature(definition: &DerivedFeatureDef) -> Result<Self, RegistryError>;
+    fn get_version(&self) -> u64;
+    fn set_version(&mut self, version: u64);
 }

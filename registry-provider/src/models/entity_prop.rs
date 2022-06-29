@@ -27,6 +27,7 @@ pub struct EntityProperty {
     pub labels: Vec<String>,
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub tags: HashMap<String, String>,
+    pub version: u64,
     #[serde(flatten)]
     pub attributes: Attributes,
 }
@@ -48,6 +49,7 @@ impl EntityPropMutator for EntityProperty {
             display_text: definition.qualified_name.to_owned(),
             labels: Default::default(),
             attributes: Attributes::Project,
+            version: 0,
         })
     }
     fn new_source(definition: &SourceDef) -> Result<Self, RegistryError> {
@@ -70,6 +72,7 @@ impl EntityPropMutator for EntityProperty {
                 timestamp_format: definition.timestamp_format.to_owned(),
                 type_: definition.source_type.to_owned(),
             }),
+            version: 0,
         })
     }
     fn new_anchor(definition: &AnchorDef) -> Result<Self, RegistryError> {
@@ -82,6 +85,7 @@ impl EntityPropMutator for EntityProperty {
             display_text: definition.name.to_owned(),
             labels: Default::default(),
             attributes: Attributes::Anchor,
+            version: 0,
         })
     }
     fn new_anchor_feature(definition: &AnchorFeatureDef) -> Result<Self, RegistryError> {
@@ -98,6 +102,7 @@ impl EntityPropMutator for EntityProperty {
                 transformation: definition.transformation.to_owned(),
                 key: definition.key.to_owned(),
             }),
+            version: 0,
         })
     }
     fn new_derived_feature(definition: &DerivedFeatureDef) -> Result<Self, RegistryError> {
@@ -114,7 +119,14 @@ impl EntityPropMutator for EntityProperty {
                 transformation: definition.transformation.to_owned(),
                 key: definition.key.to_owned(),
             }),
+            version: 0,
         })
+    }
+    fn get_version(&self) -> u64 {
+        self.version
+    }
+    fn set_version(&mut self, version: u64) {
+        self.version = version;
     }
 }
 
@@ -125,6 +137,7 @@ impl From<EntityProperty> for Entity<EntityProperty> {
             entity_type: EntityType::AnchorFeature,
             name: v.name.to_owned(),
             qualified_name: v.qualified_name.to_owned(),
+            version: 0,
             properties: v,
         }
     }

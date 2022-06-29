@@ -1,12 +1,31 @@
-use std::{fmt::Debug, collections::HashSet};
+use std::{collections::HashSet, fmt::Debug};
 
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::{Entity, ToDocString, EntityPropMutator, RegistryError, EdgeType, Edge, EntityType, ProjectDef, SourceDef, AnchorDef, AnchorFeatureDef, DerivedFeatureDef};
+use crate::{
+    AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgeType, Entity, EntityPropMutator,
+    EntityType, ProjectDef, RegistryError, SourceDef, ToDocString,
+};
+
+pub fn extract_version(name: &str) -> (&str, Option<u64>) {
+    match name.rfind(':') {
+        Some(pos) => match name[pos + 1..name.len()].parse() {
+            Ok(version) => (&name[0..pos], Some(version)),
+            Err(_) => {
+                if &name[pos + 1..name.len()] == "latest" {
+                    (&name[0..pos], None)
+                } else {
+                    (name, None)
+                }
+            }
+        },
+        None => (name, None),
+    }
+}
 
 #[async_trait]
-pub trait RegistryProvider<EntityProp> : Send + Sync
+pub trait RegistryProvider<EntityProp>: Send + Sync
 where
     // Self: Sized + Send + Sync,
     EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
@@ -14,7 +33,11 @@ where
     /**
      * Batch load entities and edges
      */
-    async fn load_data(&mut self, entities: Vec<Entity<EntityProp>>, edges: Vec<Edge>) -> Result<(), RegistryError>;
+    async fn load_data(
+        &mut self,
+        entities: Vec<Entity<EntityProp>>,
+        edges: Vec<Edge>,
+    ) -> Result<(), RegistryError>;
 
     /**
      * Get ids of all entry points
@@ -37,18 +60,12 @@ where
     /**
      * Get multiple entities by their ids
      */
-    fn get_entities(
-        &self,
-        uuids: HashSet<Uuid>,
-    ) -> Result<Vec<Entity<EntityProp>>, RegistryError>;
+    fn get_entities(&self, uuids: HashSet<Uuid>) -> Result<Vec<Entity<EntityProp>>, RegistryError>;
 
     /**
      * Get entity id by its name
      */
-    fn get_entity_id_by_qualified_name(
-        &self,
-        qualified_name: &str,
-    ) -> Result<Uuid, RegistryError>;
+    fn get_entity_id_by_qualified_name(&self, qualified_name: &str) -> Result<Uuid, RegistryError>;
 
     /**
      * Get all neighbors with specified connection type
@@ -131,10 +148,7 @@ where
         definition: &DerivedFeatureDef,
     ) -> Result<Uuid, RegistryError>;
 
-    async fn delete_entity(
-        &mut self,
-        id: Uuid,
-    ) -> Result<(), RegistryError>;
+    async fn delete_entity(&mut self, id: Uuid) -> Result<(), RegistryError>;
 
     // Provided implementations
 
@@ -147,8 +161,7 @@ where
     ) -> Result<Entity<EntityProp>, RegistryError> {
         match Uuid::parse_str(id_or_name) {
             Ok(id) => self.get_entity(id),
-            Err(_) => self
-                .get_entity_by_qualified_name(id_or_name),
+            Err(_) => self.get_entity_by_qualified_name(id_or_name),
         }
     }
 
@@ -241,5 +254,22 @@ where
                 .collect(),
         ))
     }
+
+    fn get_all_versions(&self, qualified_name: &str) -> Vec<Entity<EntityProp>>;
+
+    fn get_next_version_number(&self, qualified_name: &str) -> u64;
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::extract_version;
+
+    #[test]
+    fn test_extract_version() {
+        assert_eq!(extract_version("abc_def"), ("abc_def", None));
+        assert_eq!(extract_version("abc_def:42"), ("abc_def", Some(42)));
+        assert_eq!(extract_version("abc:def:42"), ("abc:def", Some(42)));
+        assert_eq!(extract_version("abc_def:latest"), ("abc_def", None));
+        assert_eq!(extract_version("abc_def:xyz"), ("abc_def:xyz", None));
+    }
+}

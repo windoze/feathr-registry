@@ -43,6 +43,7 @@ pub struct Entity {
     pub guid: String,
     pub name: String,
     pub qualified_name: String,
+    pub version: u64,
     #[oai(rename = "typeName")]
     pub entity_type: EntityType,
     pub status: String,
@@ -57,6 +58,7 @@ impl From<registry_provider::Entity<EntityProperty>> for Entity {
             guid: v.properties.guid.to_string(),
             name: v.name,
             qualified_name: v.qualified_name,
+            version: v.version,
             entity_type: v.entity_type.into(),
             status: format!("{:?}", v.properties.status),
             display_text: v.properties.display_text.clone(),
@@ -103,7 +105,7 @@ impl EntityRef {
         Self {
             guid: e.id.to_string(),
             type_name: e.entity_type.get_name().to_string(),
-            unique_attributes: [("qualifiedName".to_string(), e.qualified_name.clone())]
+            unique_attributes: [("qualifiedName".to_string(), format!("{}:{}", e.qualified_name, e.version))]
                 .into_iter()
                 .collect(),
         }
