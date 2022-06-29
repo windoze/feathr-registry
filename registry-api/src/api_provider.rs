@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use common_utils::{set, Blank};
 use log::debug;
 use registry_provider::{
-    Edge, EdgeProperty, EdgeType, EntityProperty, RegistryError, RegistryProvider,
+    Edge, EdgeType, EntityProperty, RegistryError, RegistryProvider,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -103,7 +103,7 @@ pub enum FeathrApiRequest {
     },
     BatchLoad {
         entities: Vec<registry_provider::Entity<EntityProperty>>,
-        edges: Vec<Edge<EdgeProperty>>,
+        edges: Vec<Edge>,
     },
 }
 
@@ -225,21 +225,21 @@ impl From<Vec<registry_provider::Entity<EntityProperty>>> for FeathrApiResponse 
 impl
     From<(
         Vec<registry_provider::Entity<EntityProperty>>,
-        Vec<Edge<EdgeProperty>>,
+        Vec<Edge>,
     )> for FeathrApiResponse
 {
     fn from(
         v: (
             Vec<registry_provider::Entity<EntityProperty>>,
-            Vec<Edge<EdgeProperty>>,
+            Vec<Edge>,
         ),
     ) -> Self {
         Self::EntityLineage(v.into())
     }
 }
 
-impl From<(Vec<Entity>, Vec<Edge<EdgeProperty>>)> for FeathrApiResponse {
-    fn from(v: (Vec<Entity>, Vec<Edge<EdgeProperty>>)) -> Self {
+impl From<(Vec<Entity>, Vec<Edge>)> for FeathrApiResponse {
+    fn from(v: (Vec<Entity>, Vec<Edge>)) -> Self {
         Self::EntityLineage(v.into())
     }
 }
@@ -270,12 +270,12 @@ pub trait FeathrApiProvider: Sync + Send {
 #[async_trait]
 impl<T> FeathrApiProvider for T
 where
-    T: RegistryProvider<EntityProperty, EdgeProperty> + Sync + Send,
+    T: RegistryProvider<EntityProperty> + Sync + Send,
 {
     async fn request(&mut self, request: FeathrApiRequest) -> FeathrApiResponse {
         fn get_id<T>(t: &T, id_or_name: String) -> Result<Uuid, RegistryError>
         where
-            T: RegistryProvider<EntityProperty, EdgeProperty>,
+            T: RegistryProvider<EntityProperty>,
         {
             match Uuid::parse_str(&id_or_name) {
                 Ok(id) => Ok(id),
@@ -285,7 +285,7 @@ where
 
         fn get_name<T>(t: &T, uuid: Uuid) -> Result<String, RegistryError>
         where
-            T: RegistryProvider<EntityProperty, EdgeProperty>,
+            T: RegistryProvider<EntityProperty>,
         {
             t.get_entity_name(uuid)
         }
@@ -296,7 +296,7 @@ where
             child_id_or_name: String,
         ) -> Result<(Uuid, Uuid), RegistryError>
         where
-            T: RegistryProvider<EntityProperty, EdgeProperty>,
+            T: RegistryProvider<EntityProperty>,
         {
             debug!("Parent name: {}", parent_id_or_name);
             debug!("Child name: {}", child_id_or_name);
@@ -320,7 +320,7 @@ where
             scope: Option<Uuid>,
         ) -> Result<Vec<Entity>, RegistryError>
         where
-            T: RegistryProvider<EntityProperty, EdgeProperty>,
+            T: RegistryProvider<EntityProperty>,
         {
             t.search_entity(
                 &keyword.unwrap_or_default(),
@@ -341,7 +341,7 @@ where
             types: HashSet<registry_provider::EntityType>,
         ) -> Result<Vec<Entity>, RegistryError>
         where
-            T: RegistryProvider<EntityProperty, EdgeProperty>,
+            T: RegistryProvider<EntityProperty>,
         {
             debug!("Project name: {}", id_or_name);
             let scope_id = get_id(t, id_or_name)?;
@@ -356,7 +356,7 @@ where
 
         fn fill_entity<T>(this: &T, mut e: registry_provider::Entity<EntityProperty>) -> Entity
         where
-            T: RegistryProvider<EntityProperty, EdgeProperty>,
+            T: RegistryProvider<EntityProperty>,
         {
             match &mut e.properties.attributes {
                 registry_provider::Attributes::Project => {
@@ -460,7 +460,7 @@ where
             request: FeathrApiRequest,
         ) -> Result<FeathrApiResponse, ApiError>
         where
-            T: RegistryProvider<EntityProperty, EdgeProperty>,
+            T: RegistryProvider<EntityProperty>,
         {
             Ok(match request {
                 FeathrApiRequest::GetProjects {

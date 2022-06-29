@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 
 use poem_openapi::{Enum, Object};
-use registry_provider::{EntityProperty, EdgeProperty};
+use registry_provider::EntityProperty;
 use serde::{Deserialize, Serialize};
 
 use super::{EntityAttributes, Relationship};
@@ -118,28 +118,28 @@ pub struct EntityLineage {
     pub relations: Vec<Relationship>,
 }
 
-impl From<(Vec<registry_provider::Entity<EntityProperty>>, Vec<registry_provider::Edge<EdgeProperty>>)> for EntityLineage {
-    fn from((entities, edges): (Vec<registry_provider::Entity<EntityProperty>>, Vec<registry_provider::Edge<EdgeProperty>>)) -> Self {
+impl From<(Vec<registry_provider::Entity<EntityProperty>>, Vec<registry_provider::Edge>)> for EntityLineage {
+    fn from((entities, edges): (Vec<registry_provider::Entity<EntityProperty>>, Vec<registry_provider::Edge>)) -> Self {
         let guid_entity_map: HashMap<String, Entity> = entities
             .into_iter()
             .map(|e| (e.id.to_string(), e.into()))
             .collect();
         Self {
             guid_entity_map,
-            relations: edges.into_iter().map(|e| e.properties.into()).collect(),
+            relations: edges.into_iter().map(|e| e.into()).collect(),
         }
     }
 }
 
-impl From<(Vec<Entity>, Vec<registry_provider::Edge<EdgeProperty>>)> for EntityLineage {
-    fn from((entities, edges): (Vec<Entity>, Vec<registry_provider::Edge<EdgeProperty>>)) -> Self {
+impl From<(Vec<Entity>, Vec<registry_provider::Edge>)> for EntityLineage {
+    fn from((entities, edges): (Vec<Entity>, Vec<registry_provider::Edge>)) -> Self {
         let guid_entity_map: HashMap<String, Entity> = entities
             .into_iter()
             .map(|e| (e.guid.clone(), e))
             .collect();
         Self {
             guid_entity_map,
-            relations: edges.into_iter().map(|e| e.properties.into()).collect(),
+            relations: edges.into_iter().map(|e| e.into()).collect(),
         }
     }
 }

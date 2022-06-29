@@ -16,7 +16,7 @@ use openraft::{
     StorageError, StorageIOError, Vote,
 };
 use registry_api::{FeathrApiProvider, FeathrApiResponse};
-use registry_provider::{EdgeProperty, EntityProperty};
+use registry_provider::EntityProperty;
 use serde::{Deserialize, Serialize};
 use sled::{Db, IVec};
 use sql_provider::Registry;
@@ -40,7 +40,7 @@ pub struct RegistryStateMachine {
 
     pub last_membership: EffectiveMembership<RegistryNodeId>,
 
-    pub registry: Registry<EntityProperty, EdgeProperty>,
+    pub registry: Registry<EntityProperty>,
 }
 
 #[derive(Debug)]

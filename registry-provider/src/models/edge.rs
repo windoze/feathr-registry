@@ -1,9 +1,5 @@
 use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
 
-use serde::de::{self, MapAccess, SeqAccess, Visitor};
-use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -119,185 +115,24 @@ impl EdgeType {
     }
 }
 
-#[derive(Clone, Debug, Eq)]
-pub struct Edge<Prop>
-where
-    Prop: Clone + Debug + PartialEq + Eq,
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Edge
 {
-    pub from: Uuid,
-    pub to: Uuid,
+    #[serde(rename = "relationshipType")]
     pub edge_type: EdgeType,
-    pub properties: Prop,
+    #[serde(rename = "fromEntityId")]
+    pub from: Uuid,
+    #[serde(rename = "toEntityId")]
+    pub to: Uuid,
 }
 
-impl<Prop> Edge<Prop>
-where
-    Prop: Clone + Debug + PartialEq + Eq + EdgePropMutator,
+impl Edge
 {
     pub fn reflection(&self) -> Self {
         Self {
             from: self.to,
             to: self.from,
             edge_type: self.edge_type.reflection(),
-            properties: self.properties.reflection(),
         }
     }
-}
-
-impl<Prop> PartialEq for Edge<Prop>
-where
-    Prop: Clone + Debug + PartialEq + Eq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.from == other.from && self.to == other.to && self.edge_type == other.edge_type
-    }
-}
-
-impl<Prop> Hash for Edge<Prop>
-where
-    Prop: Clone + Debug + PartialEq + Eq,
-{
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.from.hash(state);
-        self.to.hash(state);
-        self.edge_type.hash(state);
-    }
-}
-
-impl<Prop> Serialize for Edge<Prop>
-where
-    Prop: Clone + Debug + PartialEq + Eq + Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut entity = serializer.serialize_struct("Edge", 4)?;
-        entity.serialize_field("from", &self.from)?;
-        entity.serialize_field("to", &self.to)?;
-        entity.serialize_field("edge_type", &self.edge_type)?;
-        entity.serialize_field("properties", &self.properties)?;
-        entity.end()
-    }
-}
-
-impl<'de, Prop> Deserialize<'de> for Edge<Prop>
-where
-    Prop: Clone + Debug + PartialEq + Eq + Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "snake_case")]
-        enum Field {
-            From,
-            To,
-            EdgeType,
-            Properties,
-        }
-        struct EdgeVisitor<T> {
-            _t: std::marker::PhantomData<T>,
-        }
-
-        impl<'de, Prop> Visitor<'de> for EdgeVisitor<Prop>
-        where
-            Prop: Clone + Debug + PartialEq + Eq + Deserialize<'de>,
-        {
-            type Value = Edge<Prop>;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("struct Edge")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<Edge<Prop>, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let from = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let to = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let edge_type = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-                let properties = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(3, &self))?;
-                Ok(Edge::<Prop> {
-                    from,
-                    to,
-                    edge_type,
-                    properties,
-                })
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<Edge<Prop>, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut from = None;
-                let mut to = None;
-                let mut edge_type = None;
-                let mut properties = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::From => {
-                            if from.is_some() {
-                                return Err(de::Error::duplicate_field("from"));
-                            }
-                            from = Some(map.next_value()?);
-                        }
-                        Field::To => {
-                            if to.is_some() {
-                                return Err(de::Error::duplicate_field("to"));
-                            }
-                            to = Some(map.next_value()?);
-                        }
-                        Field::EdgeType => {
-                            if edge_type.is_some() {
-                                return Err(de::Error::duplicate_field("edge_type"));
-                            }
-                            edge_type = Some(map.next_value()?);
-                        }
-                        Field::Properties => {
-                            if properties.is_some() {
-                                return Err(de::Error::duplicate_field("properties"));
-                            }
-                            properties = Some(map.next_value()?);
-                        }
-                    }
-                }
-                let from = from.ok_or_else(|| de::Error::missing_field("from"))?;
-                let to = to.ok_or_else(|| de::Error::missing_field("to"))?;
-                let edge_type = edge_type.ok_or_else(|| de::Error::missing_field("edge_type"))?;
-                let properties =
-                    properties.ok_or_else(|| de::Error::missing_field("properties"))?;
-                Ok(Edge::<Prop> {
-                    from,
-                    to,
-                    edge_type,
-                    properties,
-                })
-            }
-        }
-
-        const FIELDS: &[&str] = &["from", "to", "edge_type", "properties"];
-        deserializer.deserialize_struct("Edge", FIELDS, EdgeVisitor::<Prop> { _t: PhantomData })
-    }
-}
-
-pub trait EdgePropMutator
-where
-    Self: Clone + Debug + PartialEq + Eq,
-{
-    fn new(from_id: Uuid, to_id: Uuid, edge_type: EdgeType) -> Self;
-
-    /**
-     * Get the refection of this edge, e.g. (A contains B) -> (B belongsTo A)
-     */
-    fn reflection(&self) -> Self;
 }

@@ -9,11 +9,11 @@ use tiberius::{FromSql, Row};
 use tokio::sync::{OnceCell, RwLock};
 use uuid::Uuid;
 
-use registry_provider::{Edge, EdgeProperty, EdgeType, Entity, EntityProperty, RegistryError};
+use registry_provider::{Edge, EdgeType, Entity, EntityProperty, RegistryError};
 
 use crate::{db_registry::ExternalStorage, Registry};
 
-fn edge_try_from_row(r: Row) -> Result<EdgeProperty, tiberius::error::Error> {
+fn edge_try_from_row(r: Row) -> Result<Edge, tiberius::error::Error> {
     let c: Option<&str> = r.get(0);
     let from = Uuid::parse_str(c.unwrap_or_default())
         .map_err(|e| tiberius::error::Error::Conversion(format!("{:?}", e).into()))?;
@@ -27,7 +27,7 @@ fn edge_try_from_row(r: Row) -> Result<EdgeProperty, tiberius::error::Error> {
     let edge_type: EdgeType = serde_json::from_str::<EdgeType>(&s)
         .ok()
         .ok_or_else(|| tiberius::error::Error::Conversion("".into()))?;
-    Ok(EdgeProperty {
+    Ok(Edge {
         from,
         to,
         edge_type,
@@ -69,10 +69,10 @@ async fn load_entities(
 
 async fn load_edges(
     conn: &mut PooledConnection<'static, ConnectionManager>,
-) -> Result<Vec<EdgeProperty>, anyhow::Error> {
+) -> Result<Vec<Edge>, anyhow::Error> {
     let edges_table = std::env::var("MSSQL_EDGE_TABLE").unwrap_or_else(|_| "edges".to_string());
     debug!("Loading edges from {}", edges_table);
-    let x: Vec<EdgeProperty> = conn
+    let x: Vec<Edge> = conn
         .simple_query(format!(
             "SELECT from_id, to_id, edge_type from {}",
             edges_table
@@ -116,7 +116,7 @@ pub fn validate_condition() -> bool {
     true
 }
 
-pub async fn load_registry() -> Result<Registry<EntityProperty, EdgeProperty>, anyhow::Error> {
+pub async fn load_registry() -> Result<Registry<EntityProperty>, anyhow::Error> {
     debug!("Loading registry data from database");
     let mut conn = connect().await?;
     let edges = load_edges(&mut conn).await?;
@@ -139,7 +139,7 @@ pub async fn load_registry() -> Result<Registry<EntityProperty, EdgeProperty>, a
 }
 
 pub async fn load_content(
-) -> Result<(Vec<Entity<EntityProperty>>, Vec<Edge<EdgeProperty>>), anyhow::Error> {
+) -> Result<(Vec<Entity<EntityProperty>>, Vec<Edge>), anyhow::Error> {
     debug!("Loading registry data from database");
     let mut conn = connect().await?;
     let edges = load_edges(&mut conn).await?;
@@ -155,7 +155,7 @@ pub async fn load_content(
     ))
 }
 
-pub fn attach_storage(registry: &mut Registry<EntityProperty, EdgeProperty>) {
+pub fn attach_storage(registry: &mut Registry<EntityProperty>) {
     registry
         .external_storage
         .push(Arc::new(RwLock::new(MsSqlStorage::default())));
@@ -323,17 +323,17 @@ mod tests {
 
     use crate::*;
 
-    pub async fn load() -> Registry<EntityProperty, EdgeProperty> {
+    pub async fn load() -> Registry<EntityProperty> {
         #[derive(Debug, Deserialize)]
         struct SampleData {
             #[serde(rename = "guidEntityMap")]
             guid_entity_map: HashMap<Uuid, EntityProperty>,
             #[serde(rename = "relations")]
-            relations: Vec<EdgeProperty>,
+            relations: Vec<Edge>,
         }
         let f = File::open("../test-data/sample.json").unwrap();
         let data: SampleData = serde_json::from_reader(f).unwrap();
-        let mut r = Registry::<EntityProperty, EdgeProperty>::load(
+        let mut r = Registry::<EntityProperty>::load(
             data.guid_entity_map.into_iter().map(|(_, i)| i.into()),
             data.relations.into_iter().map(|i| i.into()),
         )
@@ -355,11 +355,6 @@ mod tests {
                 sub,
                 project,
                 EdgeType::BelongsTo,
-                EdgeProperty {
-                    edge_type: EdgeType::BelongsTo,
-                    from: sub,
-                    to: project,
-                },
             )
             .unwrap();
         }

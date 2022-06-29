@@ -85,13 +85,12 @@ where
 }
 
 #[derive(Debug)]
-pub struct Registry<EntityProp, EdgeProp>
+pub struct Registry<EntityProp>
 where
     EntityProp: Clone + Debug + PartialEq + Eq + ToDocString,
-    EdgeProp: Clone + Debug + PartialEq + Eq,
 {
     // The graph
-    pub(crate) graph: Graph<Entity<EntityProp>, Edge<EdgeProp>, Directed>,
+    pub(crate) graph: Graph<Entity<EntityProp>, Edge, Directed>,
 
     // Secondary index for nodes, can be used as entry points for all entity GUIDs
     pub(crate) node_id_map: HashMap<Uuid, NodeIndex>,
@@ -112,10 +111,9 @@ where
     pub external_storage: Vec<Arc<RwLock<dyn ExternalStorage<EntityProp>>>>,
 }
 
-impl<EntityProp, EdgeProp> Default for Registry<EntityProp, EdgeProp>
+impl<EntityProp> Default for Registry<EntityProp>
 where
     EntityProp: Clone + Debug + PartialEq + Eq + ToDocString,
-    EdgeProp: Clone + Debug + PartialEq + Eq,
 {
     fn default() -> Self {
         Self {
@@ -131,7 +129,7 @@ where
 }
 
 #[allow(dead_code)]
-impl<'de, EntityProp, EdgeProp> Registry<EntityProp, EdgeProp>
+impl<'de, EntityProp> Registry<EntityProp>
 where
     EntityProp: Clone
         + Debug
@@ -142,10 +140,9 @@ where
         + Send
         + Sync
         + Deserialize<'de>,
-    EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deserialize<'de>,
 {
     pub fn from_content(
-        graph: Graph<Entity<EntityProp>, Edge<EdgeProp>, Directed>,
+        graph: Graph<Entity<EntityProp>, Edge, Directed>,
         deleted: HashSet<Uuid>,
     ) -> Self {
         let fts_index = FtsIndex::new();
@@ -186,10 +183,9 @@ where
 }
 
 #[allow(dead_code)]
-impl<EntityProp, EdgeProp> Registry<EntityProp, EdgeProp>
+impl<EntityProp> Registry<EntityProp>
 where
     EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
-    EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     pub(crate) fn new() -> Self {
         Self {
@@ -210,7 +206,7 @@ where
     ) -> Result<(), RegistryError>
     where
         NI: Iterator<Item = Entity<EntityProp>>,
-        EI: Iterator<Item = Edge<EdgeProp>>,
+        EI: Iterator<Item = Edge>,
     {
         let mut ids: HashSet<Uuid> = Default::default();
         self.fts_index.enable(false);
@@ -236,7 +232,7 @@ where
         }
 
         edges.for_each(|e| {
-            self.connect(e.from, e.to, e.edge_type, e.properties).ok();
+            self.connect(e.from, e.to, e.edge_type).ok();
         });
 
         self.fts_index.enable(true);
@@ -251,7 +247,7 @@ where
     pub(crate) async fn load<NI, EI>(entities: NI, edges: EI) -> Result<Self, RegistryError>
     where
         NI: Iterator<Item = Entity<EntityProp>>,
-        EI: Iterator<Item = Edge<EdgeProp>>,
+        EI: Iterator<Item = Edge>,
     {
         let mut ret = Self {
             graph: Graph::with_capacity(NODE_CAPACITY * 10, NODE_CAPACITY),
@@ -270,7 +266,7 @@ where
     pub(crate) fn get_project_by_id(
         &self,
         uuid: Uuid,
-    ) -> Result<(HashSet<Entity<EntityProp>>, HashSet<Edge<EdgeProp>>), RegistryError> {
+    ) -> Result<(HashSet<Entity<EntityProp>>, HashSet<Edge>), RegistryError> {
         let root = self.get_idx(uuid)?;
         let subgraph = self.graph.filter_map(
             |idx, node| {
@@ -406,7 +402,7 @@ where
         &self,
         uuid: Uuid,
         size_limit: usize,
-    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge<EdgeProp>>), RegistryError> {
+    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError> {
         self.bfs_traversal(
             uuid,
             size_limit,
@@ -424,7 +420,7 @@ where
         &self,
         uuid: Uuid,
         size_limit: usize,
-    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge<EdgeProp>>), RegistryError> {
+    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError> {
         self.bfs_traversal(
             uuid,
             size_limit,
@@ -439,10 +435,10 @@ where
         size_limit: usize,
         entity_pred: FN,
         edge_pred: FE,
-    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge<EdgeProp>>), RegistryError>
+    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError>
     where
         FN: Fn(&Entity<EntityProp>) -> bool,
-        FE: Fn(&Edge<EdgeProp>) -> bool,
+        FE: Fn(&Edge) -> bool,
     {
         let idx = self.get_idx(uuid)?;
         let mut entities: Vec<NodeIndex> = vec![idx];
@@ -603,7 +599,6 @@ where
         from: Uuid,
         to: Uuid,
         edge_type: EdgeType,
-        properties: EdgeProp,
     ) -> Result<(), RegistryError> {
         let from_idx = self.get_idx(from)?;
         let to_idx = self.get_idx(to)?;
@@ -628,7 +623,7 @@ where
                 debug!("Connection already exists, {:?}", e);
             }
             None => {
-                self.insert_edge(edge_type, from_idx, to_idx, from, to, properties.clone());
+                self.insert_edge(edge_type, from_idx, to_idx, from, to);
             }
         };
         match self
@@ -646,7 +641,6 @@ where
                     from_idx,
                     to,
                     from,
-                    properties.reflection(),
                 );
             }
         };
@@ -666,7 +660,7 @@ where
 
     pub(crate) fn get_neighbors_idx<F>(&self, idx: NodeIndex, predicate: F) -> Vec<NodeIndex>
     where
-        F: Fn(&Edge<EdgeProp>) -> bool,
+        F: Fn(&Edge) -> bool,
     {
         self.graph
             .edges(idx)
@@ -726,16 +720,15 @@ where
         to_idx: NodeIndex,
         from_uuid: Uuid,
         to_uuid: Uuid,
-        properties: EdgeProp,
     ) -> EdgeIndex {
-        let from = self.graph.node_weight(from_idx).unwrap().to_owned();
-        let to = self.graph.node_weight(to_idx).unwrap().to_owned();
-        if let Some(w) = self.graph.node_weight_mut(from_idx) {
-            w.properties = from.properties
-        }
-        if let Some(w) = self.graph.node_weight_mut(to_idx) {
-            w.properties = to.properties
-        }
+        // let from = self.graph.node_weight(from_idx).unwrap().to_owned();
+        // let to = self.graph.node_weight(to_idx).unwrap().to_owned();
+        // if let Some(w) = self.graph.node_weight_mut(from_idx) {
+        //     w.properties = from.properties
+        // }
+        // if let Some(w) = self.graph.node_weight_mut(to_idx) {
+        //     w.properties = to.properties
+        // }
 
         self.graph.add_edge(
             from_idx,
@@ -744,7 +737,6 @@ where
                 from: from_uuid,
                 to: to_uuid,
                 edge_type,
-                properties,
             },
         )
     }
@@ -794,16 +786,6 @@ mod tests {
 
         fn new_derived_feature(_definition: &DerivedFeatureDef) -> Result<Self, RegistryError> {
             Ok(DummyEntityProp)
-        }
-    }
-
-    impl EdgePropMutator for DummyEdgeProp {
-        fn new(_from_id: Uuid, _to_id: Uuid, _edge_type: EdgeType) -> Self {
-            DummyEdgeProp
-        }
-
-        fn reflection(&self) -> Self {
-            DummyEdgeProp
         }
     }
 
@@ -863,7 +845,7 @@ mod tests {
         }
     }
 
-    async fn init() -> Registry<DummyEntityProp, DummyEdgeProp> {
+    async fn init() -> Registry<DummyEntityProp> {
         common_utils::init_logger();
 
         // Create new registry
@@ -959,51 +941,51 @@ mod tests {
             )
             .await
             .unwrap();
-        r.connect(idx_prj1, idx_src1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj1, idx_src1, EdgeType::Contains)
             .unwrap(); // Project1 contains Source1
-        r.connect(idx_prj1, idx_an1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj1, idx_an1, EdgeType::Contains)
             .unwrap(); // Project1 contains Anchor1
-        r.connect(idx_an1, idx_src1, EdgeType::Consumes, DummyEdgeProp)
+        r.connect(idx_an1, idx_src1, EdgeType::Consumes)
             .unwrap(); // Anchor1 consumes Source1
-        r.connect(idx_prj1, idx_af1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj1, idx_af1, EdgeType::Contains)
             .unwrap(); // Project1 contains AnchorFeature1
-        r.connect(idx_prj1, idx_af2, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj1, idx_af2, EdgeType::Contains)
             .unwrap(); // Project1 contains AnchorFeature2
-        r.connect(idx_prj1, idx_af3, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj1, idx_af3, EdgeType::Contains)
             .unwrap(); // Project1 contains AnchorFeature3
-        r.connect(idx_prj1, idx_af4, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj1, idx_af4, EdgeType::Contains)
             .unwrap(); // Project1 contains AnchorFeature4
-        r.connect(idx_an1, idx_af1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_an1, idx_af1, EdgeType::Contains)
             .unwrap(); // Anchor1 contains AnchorFeature1
-        r.connect(idx_an1, idx_af2, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_an1, idx_af2, EdgeType::Contains)
             .unwrap(); // Anchor1 contains AnchorFeature2
-        r.connect(idx_an1, idx_af3, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_an1, idx_af3, EdgeType::Contains)
             .unwrap(); // Anchor1 contains AnchorFeature3
-        r.connect(idx_an1, idx_af4, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_an1, idx_af4, EdgeType::Contains)
             .unwrap(); // Anchor1 contains AnchorFeature4
-        r.connect(idx_src1, idx_af1, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_src1, idx_af1, EdgeType::Produces)
             .unwrap(); // Source1 produces AnchorFeature1
-        r.connect(idx_src1, idx_af2, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_src1, idx_af2, EdgeType::Produces)
             .unwrap(); // Source1 produces AnchorFeature2
-        r.connect(idx_src1, idx_af3, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_src1, idx_af3, EdgeType::Produces)
             .unwrap(); // Source1 produces AnchorFeature3
-        r.connect(idx_src1, idx_af4, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_src1, idx_af4, EdgeType::Produces)
             .unwrap(); // Source1 produces AnchorFeature4
-        r.connect(idx_prj1, idx_df1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj1, idx_df1, EdgeType::Contains)
             .unwrap(); // Project1 contains DerivedFeature1
-        r.connect(idx_prj1, idx_df2, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj1, idx_df2, EdgeType::Contains)
             .unwrap(); // Project1 contains DerivedFeature2
-        r.connect(idx_prj1, idx_df3, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj1, idx_df3, EdgeType::Contains)
             .unwrap(); // Project1 contains DerivedFeature3
-        r.connect(idx_af1, idx_df1, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_af1, idx_df1, EdgeType::Produces)
             .unwrap(); // AnchorFeature1 derives DerivedFeature1
-        r.connect(idx_af2, idx_df2, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_af2, idx_df2, EdgeType::Produces)
             .unwrap(); // AnchorFeature2 derives DerivedFeature2
-        r.connect(idx_af3, idx_df2, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_af3, idx_df2, EdgeType::Produces)
             .unwrap(); // AnchorFeature3 derives DerivedFeature2
-        r.connect(idx_af4, idx_df3, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_af4, idx_df3, EdgeType::Produces)
             .unwrap(); // AnchorFeature4 derives DerivedFeature3
-        r.connect(idx_df2, idx_df3, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_df2, idx_df3, EdgeType::Produces)
             .unwrap(); // DerivedFeature2 derives DerivedFeature3
 
         // Project 2
@@ -1056,29 +1038,29 @@ mod tests {
             )
             .await
             .unwrap();
-        r.connect(idx_prj2, idx_src2_1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj2, idx_src2_1, EdgeType::Contains)
             .unwrap(); // Project2 contains Source2_1
-        r.connect(idx_prj2, idx_an2_1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj2, idx_an2_1, EdgeType::Contains)
             .unwrap(); // Project2 contains Anchor2_1
-        r.connect(idx_an2_1, idx_src2_1, EdgeType::Consumes, DummyEdgeProp)
+        r.connect(idx_an2_1, idx_src2_1, EdgeType::Consumes)
             .unwrap(); // Anchor2_1 consumes Source2_1
-        r.connect(idx_prj2, idx_af2_1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj2, idx_af2_1, EdgeType::Contains)
             .unwrap(); // Project2 contains AnchorFeature2_1
-        r.connect(idx_prj2, idx_af2_2, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj2, idx_af2_2, EdgeType::Contains)
             .unwrap(); // Project2 contains AnchorFeature2_2
-        r.connect(idx_prj2, idx_af2_3, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_prj2, idx_af2_3, EdgeType::Contains)
             .unwrap(); // Project2 contains AnchorFeature2_3
-        r.connect(idx_an2_1, idx_af2_1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_an2_1, idx_af2_1, EdgeType::Contains)
             .unwrap(); // Anchor2_1 contains AnchorFeature2_1
-        r.connect(idx_an2_1, idx_af2_2, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_an2_1, idx_af2_2, EdgeType::Contains)
             .unwrap(); // Anchor2_1 contains AnchorFeature2_2
-        r.connect(idx_an2_1, idx_af2_3, EdgeType::Contains, DummyEdgeProp)
+        r.connect(idx_an2_1, idx_af2_3, EdgeType::Contains)
             .unwrap(); // Anchor2_1 contains AnchorFeature2_3
-        r.connect(idx_src2_1, idx_af2_1, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_src2_1, idx_af2_1, EdgeType::Produces)
             .unwrap(); // Source2_1 produces AnchorFeature2_1
-        r.connect(idx_src2_1, idx_af2_2, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_src2_1, idx_af2_2, EdgeType::Produces)
             .unwrap(); // Source2_1 produces AnchorFeature2_2
-        r.connect(idx_src2_1, idx_af2_3, EdgeType::Produces, DummyEdgeProp)
+        r.connect(idx_src2_1, idx_af2_3, EdgeType::Produces)
             .unwrap(); // Source2_1 produces AnchorFeature2_3
 
         r
@@ -1178,7 +1160,7 @@ mod tests {
         const ANCHOR_FEATURES: usize = 1000;
         // 10000 Derived features
         const DERIVES: usize = 10000;
-        let mut r: Registry<DummyEntityProp, DummyEdgeProp> = Registry::new();
+        let mut r: Registry<DummyEntityProp> = Registry::new();
         // FTS is very slow to insert doc one by one, so we disable it for now
         r.fts_index.enable(false);
         let prj1 = r
@@ -1199,7 +1181,7 @@ mod tests {
                 )
                 .await
                 .unwrap();
-            r.connect(prj1, an, EdgeType::Contains, DummyEdgeProp)
+            r.connect(prj1, an, EdgeType::Contains)
                 .unwrap();
             // create 1000 anchor features in each group
             for j in 0..ANCHOR_FEATURES {
@@ -1213,9 +1195,9 @@ mod tests {
                     .await
                     .unwrap();
                 features.push(f);
-                r.connect(f, prj1, EdgeType::BelongsTo, DummyEdgeProp)
+                r.connect(f, prj1, EdgeType::BelongsTo)
                     .unwrap();
-                r.connect(f, an, EdgeType::BelongsTo, DummyEdgeProp)
+                r.connect(f, an, EdgeType::BelongsTo)
                     .unwrap();
             }
             let end = Instant::now();
@@ -1241,10 +1223,10 @@ mod tests {
             let count: usize = rng.gen_range(2..10);
             for _ in 0..count {
                 let id = features[rng.gen_range(0..features.len())];
-                r.connect(f, id, EdgeType::Consumes, DummyEdgeProp).unwrap();
+                r.connect(f, id, EdgeType::Consumes).unwrap();
             }
             features.push(f);
-            r.connect(f, prj1, EdgeType::BelongsTo, DummyEdgeProp)
+            r.connect(f, prj1, EdgeType::BelongsTo)
                 .unwrap();
         }
         let end = Instant::now();
@@ -1254,7 +1236,7 @@ mod tests {
 
     #[tokio::test]
     async fn deletion() {
-        let mut r: Registry<DummyEntityProp, DummyEdgeProp> = Registry::new();
+        let mut r: Registry<DummyEntityProp> = Registry::new();
         r.external_storage
             .push(Arc::new(RwLock::new(DummyExternalStorage)));
         let prj1 = r
@@ -1280,11 +1262,11 @@ mod tests {
             .await
             .unwrap();
 
-        r.connect(prj1, src1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(prj1, src1, EdgeType::Contains)
             .unwrap();
-        r.connect(prj1, an1, EdgeType::Contains, DummyEdgeProp)
+        r.connect(prj1, an1, EdgeType::Contains)
             .unwrap();
-        r.connect(src1, an1, EdgeType::Produces, DummyEdgeProp)
+        r.connect(src1, an1, EdgeType::Produces)
             .unwrap();
 
         // Now graph should have 3 nodes and 3 edges

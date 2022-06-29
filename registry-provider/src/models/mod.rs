@@ -2,14 +2,12 @@ mod entity;
 mod edge;
 mod attributes;
 mod entity_prop;
-mod edge_prop;
 mod entity_def;
 
 pub use entity::*;
 pub use edge::*;
 pub use attributes::*;
 pub use entity_prop::*;
-pub use edge_prop::*;
 pub use entity_def::*;
 
 pub const PROJECT_TYPE: &str = "feathr_workspace_v1";

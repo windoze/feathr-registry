@@ -3,19 +3,18 @@ use std::{fmt::Debug, collections::HashSet};
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::{Entity, EdgePropMutator, ToDocString, EntityPropMutator, RegistryError, EdgeType, Edge, EntityType, ProjectDef, SourceDef, AnchorDef, AnchorFeatureDef, DerivedFeatureDef};
+use crate::{Entity, ToDocString, EntityPropMutator, RegistryError, EdgeType, Edge, EntityType, ProjectDef, SourceDef, AnchorDef, AnchorFeatureDef, DerivedFeatureDef};
 
 #[async_trait]
-pub trait RegistryProvider<EntityProp, EdgeProp> : Send + Sync
+pub trait RegistryProvider<EntityProp> : Send + Sync
 where
     // Self: Sized + Send + Sync,
     EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
-    EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     /**
      * Batch load entities and edges
      */
-    async fn load_data(&mut self, entities: Vec<Entity<EntityProp>>, edges: Vec<Edge<EdgeProp>>) -> Result<(), RegistryError>;
+    async fn load_data(&mut self, entities: Vec<Entity<EntityProp>>, edges: Vec<Edge>) -> Result<(), RegistryError>;
 
     /**
      * Get ids of all entry points
@@ -68,7 +67,7 @@ where
         uuid: Uuid,
         edge_type: EdgeType,
         size_limit: usize,
-    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge<EdgeProp>>), RegistryError>;
+    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError>;
 
     /**
      * Get entity ids with FTS
@@ -88,7 +87,7 @@ where
     fn get_project(
         &self,
         qualified_name: &str,
-    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge<EdgeProp>>), RegistryError>;
+    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError>;
 
     /**
      * Create new project
@@ -224,7 +223,7 @@ where
         &self,
         id: Uuid,
         size_limit: usize,
-    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge<EdgeProp>>), RegistryError> {
+    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError> {
         let (upstream, upstream_edges) = self.bfs(id, EdgeType::Consumes, size_limit)?;
         let (downstream, downstream_edges) = self.bfs(id, EdgeType::Produces, size_limit)?;
         Ok((
@@ -237,7 +236,7 @@ where
             upstream_edges
                 .into_iter()
                 .chain(downstream_edges.into_iter())
-                .collect::<HashSet<Edge<EdgeProp>>>()
+                .collect::<HashSet<Edge>>()
                 .into_iter()
                 .collect(),
         ))

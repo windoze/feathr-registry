@@ -9,18 +9,18 @@ use crate::Registry;
 
 
 #[cfg(any(mock, test))]
-pub async fn load() -> crate::Registry<EntityProperty, EdgeProperty> {
+pub async fn load() -> crate::Registry<EntityProperty> {
 
     #[derive(Debug, Deserialize)]
     struct SampleData {
         #[serde(rename = "guidEntityMap")]
         guid_entity_map: HashMap<Uuid, EntityProperty>,
         #[serde(rename = "relations")]
-        relations: Vec<EdgeProperty>,
+        relations: Vec<Edge>,
     }
     let f = File::open("test-data/sample.json").unwrap();
     let data: SampleData = serde_json::from_reader(f).unwrap();
-    let mut r = Registry::<EntityProperty, EdgeProperty>::load(
+    let mut r = Registry::<EntityProperty>::load(
         data.guid_entity_map.into_iter().map(|(_, i)| i.into()),
         data.relations.into_iter().map(|i| i.into()),
     )
@@ -42,11 +42,6 @@ pub async fn load() -> crate::Registry<EntityProperty, EdgeProperty> {
             sub,
             project,
             EdgeType::BelongsTo,
-            EdgeProperty {
-                edge_type: EdgeType::BelongsTo,
-                from: sub,
-                to: project,
-            },
         )
         .unwrap();
     }

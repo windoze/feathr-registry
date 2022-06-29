@@ -1,4 +1,4 @@
-use registry_provider::{ToDocString, SerializableRegistry, EntityPropMutator, EdgePropMutator};
+use registry_provider::{ToDocString, SerializableRegistry, EntityPropMutator};
 use serde::{
     de::{self, MapAccess, SeqAccess, Visitor},
     ser::SerializeStruct,
@@ -8,10 +8,9 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use crate::Registry;
 
-impl<EntityProp, EdgeProp> Serialize for Registry<EntityProp, EdgeProp>
+impl<EntityProp> Serialize for Registry<EntityProp>
 where
     EntityProp: Clone + Debug + PartialEq + Eq + ToDocString + Serialize,
-    EdgeProp: Clone + Debug + PartialEq + Eq + Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -24,7 +23,7 @@ where
     }
 }
 
-impl<'de, EntityProp, EdgeProp> Deserialize<'de> for Registry<EntityProp, EdgeProp>
+impl<'de, EntityProp> Deserialize<'de> for Registry<EntityProp>
 where
 EntityProp: Clone
 + Debug
@@ -35,7 +34,6 @@ EntityProp: Clone
 + Send
 + Sync
 + Deserialize<'de>,
-EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -47,12 +45,11 @@ EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deser
             Graph,
             Deleted,
         }
-        struct RegistryVisitor<EntityProp, EdgeProp> {
+        struct RegistryVisitor<EntityProp> {
             _t1: std::marker::PhantomData<EntityProp>,
-            _t2: std::marker::PhantomData<EdgeProp>,
         }
 
-        impl<'de, EntityProp, EdgeProp> Visitor<'de> for RegistryVisitor<EntityProp, EdgeProp>
+        impl<'de, EntityProp> Visitor<'de> for RegistryVisitor<EntityProp>
         where
         EntityProp: Clone
         + Debug
@@ -63,15 +60,14 @@ EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deser
         + Send
         + Sync
         + Deserialize<'de>,
-    EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deserialize<'de>,
         {
-            type Value = Registry<EntityProp, EdgeProp>;
+            type Value = Registry<EntityProp>;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("struct Registry")
             }
 
-            fn visit_seq<V>(self, mut seq: V) -> Result<Registry<EntityProp, EdgeProp>, V::Error>
+            fn visit_seq<V>(self, mut seq: V) -> Result<Registry<EntityProp>, V::Error>
             where
                 V: SeqAccess<'de>,
             {
@@ -81,12 +77,12 @@ EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deser
                 let deleted = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                Ok(Registry::<EntityProp, EdgeProp>::from_content(
+                Ok(Registry::<EntityProp>::from_content(
                     graph, deleted,
                 ))
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Registry<EntityProp, EdgeProp>, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Registry<EntityProp>, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -110,7 +106,7 @@ EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deser
                 }
                 let graph = graph.ok_or_else(|| de::Error::missing_field("graph"))?;
                 let deleted = deleted.ok_or_else(|| de::Error::missing_field("deleted"))?;
-                Ok(Registry::<EntityProp, EdgeProp>::from_content(
+                Ok(Registry::<EntityProp>::from_content(
                     graph, deleted,
                 ))
             }
@@ -120,15 +116,14 @@ EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Deser
         deserializer.deserialize_struct(
             "Registry",
             FIELDS,
-            RegistryVisitor::<EntityProp, EdgeProp> {
+            RegistryVisitor::<EntityProp> {
                 _t1: PhantomData,
-                _t2: PhantomData,
             },
         )
     }
 }
 
-impl<'de, EntityProp, EdgeProp> SerializableRegistry<'de> for Registry<EntityProp, EdgeProp>
+impl<'de, EntityProp> SerializableRegistry<'de> for Registry<EntityProp>
 where
 EntityProp: Clone
 + Debug
@@ -140,7 +135,6 @@ EntityProp: Clone
 + Sync
 + Serialize
 + Deserialize<'de>,
-EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync + Serialize + Deserialize<'de>,
 {
     fn take_snapshot(&self) -> Result<Vec<u8>, registry_provider::RegistryError> {
         // TODO: unwrap

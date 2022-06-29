@@ -13,6 +13,7 @@ use crate::{
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EntityStatus {
     Active,
+    Deprecated,
 }
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
@@ -32,7 +33,7 @@ pub struct EntityProperty {
 
 impl PartialEq for EntityProperty {
     fn eq(&self, other: &Self) -> bool {
-        self.attributes == other.attributes
+        self.qualified_name == other.qualified_name && self.attributes == other.attributes
     }
 }
 

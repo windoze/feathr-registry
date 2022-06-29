@@ -1,4 +1,4 @@
-use registry_provider::{EdgeProperty, EntityProperty, Entity, Edge};
+use registry_provider::{EntityProperty, Entity, Edge};
 
 use crate::Registry;
 
@@ -8,7 +8,7 @@ mod mssql;
 #[cfg(feature = "ossdmbs")]
 mod sqlx;
 
-pub async fn load_registry() -> Result<Registry<EntityProperty, EdgeProperty>, anyhow::Error> {
+pub async fn load_registry() -> Result<Registry<EntityProperty>, anyhow::Error> {
     #[cfg(feature = "ossdmbs")]
     if sqlx::validate_condition() {
         return sqlx::load_registry().await;
@@ -20,7 +20,7 @@ pub async fn load_registry() -> Result<Registry<EntityProperty, EdgeProperty>, a
     anyhow::bail!("Unable to load registry")
 }
 
-pub fn attach_storage(registry: &mut Registry<EntityProperty, EdgeProperty>) {
+pub fn attach_storage(registry: &mut Registry<EntityProperty>) {
     #[cfg(feature = "ossdmbs")]
     todo!();
 
@@ -29,7 +29,7 @@ pub fn attach_storage(registry: &mut Registry<EntityProperty, EdgeProperty>) {
 }
 
 pub async fn load_content(
-) -> Result<(Vec<Entity<EntityProperty>>, Vec<Edge<EdgeProperty>>), anyhow::Error> {
+) -> Result<(Vec<Entity<EntityProperty>>, Vec<Edge>), anyhow::Error> {
     #[cfg(feature = "ossdmbs")]
     todo!();
 

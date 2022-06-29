@@ -1,5 +1,5 @@
 use poem_openapi::{Enum, Object};
-use registry_provider::EdgeProperty;
+use registry_provider::Edge;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Enum)]
@@ -42,8 +42,8 @@ pub struct Relationship {
     pub to: String,
 }
 
-impl From<EdgeProperty> for Relationship {
-    fn from(v: EdgeProperty) -> Self {
+impl From<Edge> for Relationship {
+    fn from(v: Edge) -> Self {
         Self {
             edge_type: v.edge_type.into(),
             from: v.from.to_string(),

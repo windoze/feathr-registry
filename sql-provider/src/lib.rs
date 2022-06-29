@@ -14,17 +14,16 @@ pub use database::{attach_storage, load_content, load_registry};
 pub use db_registry::Registry;
 use log::debug;
 use registry_provider::{
-    AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgePropMutator, EdgeType, Entity,
+    AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgeType, Entity,
     EntityPropMutator, EntityType, ProjectDef, RegistryError, RegistryProvider, SourceDef,
     ToDocString,
 };
 use uuid::Uuid;
 
 #[async_trait]
-impl<EntityProp, EdgeProp> RegistryProvider<EntityProp, EdgeProp> for Registry<EntityProp, EdgeProp>
+impl<EntityProp> RegistryProvider<EntityProp> for Registry<EntityProp>
 where
     EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
-    EdgeProp: Clone + Debug + PartialEq + Eq + EdgePropMutator + Send + Sync,
 {
     /**
      * Replace existing content with input snapshot
@@ -32,7 +31,7 @@ where
     async fn load_data(
         &mut self,
         entities: Vec<Entity<EntityProp>>,
-        edges: Vec<Edge<EdgeProp>>,
+        edges: Vec<Edge>,
     ) -> Result<(), RegistryError> {
         self.batch_load(entities.into_iter(), edges.into_iter())
             .await
@@ -118,7 +117,7 @@ where
         uuid: Uuid,
         edge_type: EdgeType,
         size_limit: usize,
-    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge<EdgeProp>>), RegistryError> {
+    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError> {
         self.bfs_traversal(uuid, size_limit, |_| true, |e| e.edge_type == edge_type)
     }
 
@@ -154,7 +153,7 @@ where
     fn get_project(
         &self,
         qualified_name: &str,
-    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge<EdgeProp>>), RegistryError> {
+    ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError> {
         let uuid = self.get_entity_id(qualified_name)?;
         let (entities, edges) = self.get_project_by_id(uuid)?;
         Ok((entities.into_iter().collect(), edges.into_iter().collect()))
@@ -199,7 +198,6 @@ where
             project_id,
             source_id,
             EdgeType::Contains,
-            EdgeProp::new(project_id, source_id, EdgeType::Contains),
         )?;
 
         self.index_entity(source_id)?;
@@ -259,14 +257,12 @@ where
             project_id,
             anchor_id,
             EdgeType::Contains,
-            EdgeProp::new(project_id, anchor_id, EdgeType::Contains),
         )?;
 
         self.connect(
             anchor_id,
             definition.source_id,
             EdgeType::Consumes,
-            EdgeProp::new(anchor_id, definition.source_id, EdgeType::Consumes),
         )?;
 
         self.index_entity(anchor_id)?;
@@ -296,14 +292,12 @@ where
             project_id,
             feature_id,
             EdgeType::Contains,
-            EdgeProp::new(project_id, feature_id, EdgeType::Contains),
         )?;
 
         self.connect(
             anchor_id,
             feature_id,
             EdgeType::Contains,
-            EdgeProp::new(anchor_id, feature_id, EdgeType::Contains),
         )?;
 
         // Anchor feature also consumes source of the anchor
@@ -313,7 +307,6 @@ where
                 feature_id,
                 s.id,
                 EdgeType::Consumes,
-                EdgeProp::new(feature_id, s.id, EdgeType::Consumes),
             )?;
         }
 
@@ -381,7 +374,6 @@ where
             project_id,
             feature_id,
             EdgeType::Contains,
-            EdgeProp::new(project_id, feature_id, EdgeType::Contains),
         )?;
 
         for &id in definition
@@ -393,7 +385,6 @@ where
                 feature_id,
                 id,
                 EdgeType::Consumes,
-                EdgeProp::new(feature_id, id, EdgeType::Consumes),
             )?;
         }
 
