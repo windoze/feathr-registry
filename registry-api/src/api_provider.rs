@@ -3,9 +3,7 @@ use std::collections::HashSet;
 use async_trait::async_trait;
 use common_utils::{set, Blank};
 use log::debug;
-use registry_provider::{
-    Edge, EdgeType, EntityProperty, RegistryError, RegistryProvider,
-};
+use registry_provider::{Edge, EdgeType, EntityProperty, RegistryError, RegistryProvider};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -46,6 +44,15 @@ pub enum FeathrApiRequest {
         project_id_or_name: String,
         id_or_name: String,
     },
+    GetProjectDataSourceVersions {
+        project_id_or_name: String,
+        id_or_name: String,
+    },
+    GetProjectDataSourceVersion {
+        project_id_or_name: String,
+        id_or_name: String,
+        version: Option<u64>,
+    },
     CreateProjectDataSource {
         project_id_or_name: String,
         definition: SourceDef,
@@ -60,6 +67,15 @@ pub enum FeathrApiRequest {
         project_id_or_name: String,
         id_or_name: String,
     },
+    GetProjectAnchorVersions {
+        project_id_or_name: String,
+        id_or_name: String,
+    },
+    GetProjectAnchorVersion {
+        project_id_or_name: String,
+        id_or_name: String,
+        version: Option<u64>,
+    },
     CreateProjectAnchor {
         project_id_or_name: String,
         definition: AnchorDef,
@@ -73,6 +89,15 @@ pub enum FeathrApiRequest {
     GetProjectDerivedFeature {
         project_id_or_name: String,
         id_or_name: String,
+    },
+    GetProjectDerivedFeatureVersions {
+        project_id_or_name: String,
+        id_or_name: String,
+    },
+    GetProjectDerivedFeatureVersion {
+        project_id_or_name: String,
+        id_or_name: String,
+        version: Option<u64>,
     },
     CreateProjectDerivedFeature {
         project_id_or_name: String,
@@ -89,6 +114,17 @@ pub enum FeathrApiRequest {
         project_id_or_name: String,
         anchor_id_or_name: String,
         id_or_name: String,
+    },
+    GetAnchorFeatureVersions {
+        project_id_or_name: String,
+        anchor_id_or_name: String,
+        id_or_name: String,
+    },
+    GetAnchorFeatureVersion {
+        project_id_or_name: String,
+        anchor_id_or_name: String,
+        id_or_name: String,
+        version: Option<u64>,
     },
     CreateAnchorFeature {
         project_id_or_name: String,
@@ -222,18 +258,8 @@ impl From<Vec<registry_provider::Entity<EntityProperty>>> for FeathrApiResponse 
     }
 }
 
-impl
-    From<(
-        Vec<registry_provider::Entity<EntityProperty>>,
-        Vec<Edge>,
-    )> for FeathrApiResponse
-{
-    fn from(
-        v: (
-            Vec<registry_provider::Entity<EntityProperty>>,
-            Vec<Edge>,
-        ),
-    ) -> Self {
+impl From<(Vec<registry_provider::Entity<EntityProperty>>, Vec<Edge>)> for FeathrApiResponse {
+    fn from(v: (Vec<registry_provider::Entity<EntityProperty>>, Vec<Edge>)) -> Self {
         Self::EntityLineage(v.into())
     }
 }
@@ -287,7 +313,7 @@ where
         where
             T: RegistryProvider<EntityProperty>,
         {
-            t.get_entity_name(uuid)
+            t.get_entity_qualified_name(uuid)
         }
 
         fn get_child_id<T>(
@@ -566,6 +592,24 @@ where
                         .map(|e| fill_entity(this, e))
                         .into()
                 }
+                FeathrApiRequest::GetProjectDataSourceVersions {
+                    project_id_or_name,
+                    id_or_name,
+                } => {
+                    let (_, source_id) = get_child_id(this, project_id_or_name, id_or_name)?;
+                    let source = this.get_entity(source_id).map(|e| fill_entity(this, e))?;
+                    this.get_all_versions(&source.qualified_name).into()
+                }
+                FeathrApiRequest::GetProjectDataSourceVersion {
+                    project_id_or_name,
+                    id_or_name,
+                    version,
+                } => {
+                    let (_, source_id) = get_child_id(this, project_id_or_name, id_or_name)?;
+                    let source = this.get_entity(source_id).map(|e| fill_entity(this, e))?;
+                    this.get_entity_version(&source.qualified_name, version)
+                        .into()
+                }
                 FeathrApiRequest::CreateProjectDataSource {
                     project_id_or_name,
                     mut definition,
@@ -607,6 +651,24 @@ where
                         .map(|e| fill_entity(this, e))
                         .into()
                 }
+                FeathrApiRequest::GetProjectAnchorVersions {
+                    project_id_or_name,
+                    id_or_name,
+                } => {
+                    let (_, anchor_id) = get_child_id(this, project_id_or_name, id_or_name)?;
+                    let anchor = this.get_entity(anchor_id).map(|e| fill_entity(this, e))?;
+                    this.get_all_versions(&anchor.qualified_name).into()
+                }
+                FeathrApiRequest::GetProjectAnchorVersion {
+                    project_id_or_name,
+                    id_or_name,
+                    version,
+                } => {
+                    let (_, anchor_id) = get_child_id(this, project_id_or_name, id_or_name)?;
+                    let anchor = this.get_entity(anchor_id).map(|e| fill_entity(this, e))?;
+                    this.get_entity_version(&anchor.qualified_name, version)
+                        .into()
+                }
                 FeathrApiRequest::CreateProjectAnchor {
                     project_id_or_name,
                     mut definition,
@@ -641,6 +703,23 @@ where
                 } => {
                     let (_, feature_id) = get_child_id(this, project_id_or_name, id_or_name)?;
                     this.get_entity(feature_id).into()
+                }
+                FeathrApiRequest::GetProjectDerivedFeatureVersions {
+                    project_id_or_name,
+                    id_or_name,
+                } => {
+                    let (_, feature_id) = get_child_id(this, project_id_or_name, id_or_name)?;
+                    let f = this.get_entity(feature_id)?;
+                    this.get_all_versions(&f.qualified_name).into()
+                }
+                FeathrApiRequest::GetProjectDerivedFeatureVersion {
+                    project_id_or_name,
+                    id_or_name,
+                    version,
+                } => {
+                    let (_, feature_id) = get_child_id(this, project_id_or_name, id_or_name)?;
+                    let f = this.get_entity(feature_id)?;
+                    this.get_entity_version(&f.qualified_name, version).into()
                 }
                 FeathrApiRequest::CreateProjectDerivedFeature {
                     project_id_or_name,
@@ -680,6 +759,27 @@ where
                     let (_, feature_id) = get_child_id(this, anchor_id.to_string(), id_or_name)?;
                     this.get_entity(feature_id).into()
                 }
+                FeathrApiRequest::GetAnchorFeatureVersions {
+                    project_id_or_name,
+                    anchor_id_or_name,
+                    id_or_name,
+                } => {
+                    let (_, anchor_id) = get_child_id(this, project_id_or_name, anchor_id_or_name)?;
+                    let (_, feature_id) = get_child_id(this, anchor_id.to_string(), id_or_name)?;
+                    let f = this.get_entity(feature_id)?;
+                    this.get_all_versions(&f.qualified_name).into()
+                }
+                FeathrApiRequest::GetAnchorFeatureVersion {
+                    project_id_or_name,
+                    anchor_id_or_name,
+                    id_or_name,
+                    version,
+                } => {
+                    let (_, anchor_id) = get_child_id(this, project_id_or_name, anchor_id_or_name)?;
+                    let (_, feature_id) = get_child_id(this, anchor_id.to_string(), id_or_name)?;
+                    let f = this.get_entity(feature_id)?;
+                    this.get_entity_version(&f.qualified_name, version).into()
+                }
                 FeathrApiRequest::CreateAnchorFeature {
                     project_id_or_name,
                     anchor_id_or_name,
@@ -687,10 +787,8 @@ where
                 } => {
                     let (project_id, anchor_id) =
                         get_child_id(this, project_id_or_name, anchor_id_or_name)?;
-                    let project_name = get_name(this, project_id)?;
                     let anchor_name = get_name(this, anchor_id)?;
-                    definition.qualified_name =
-                        format!("{}__{}__{}", project_name, anchor_name, definition.name);
+                    definition.qualified_name = format!("{}__{}", anchor_name, definition.name);
                     this.new_anchor_feature(project_id, anchor_id, &definition.try_into()?)
                         .await
                         .into()

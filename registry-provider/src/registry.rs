@@ -257,6 +257,32 @@ where
 
     fn get_all_versions(&self, qualified_name: &str) -> Vec<Entity<EntityProp>>;
 
+    fn get_entity_version(
+        &self,
+        qualified_name: &str,
+        version: Option<u64>,
+    ) -> Result<Entity<EntityProp>, RegistryError> {
+        let versions = self.get_all_versions(qualified_name);
+        match version {
+            Some(v) => {
+                versions
+                    .into_iter()
+                    .find(|e| e.version == v)
+                    .ok_or(RegistryError::EntityNotFound(format!(
+                        "{}:{}",
+                        qualified_name, v
+                    )))
+            }
+            None => versions
+                .last()
+                .cloned()
+                .ok_or(RegistryError::EntityNotFound(format!(
+                    "{}:latest",
+                    qualified_name
+                ))),
+        }
+    }
+
     fn get_next_version_number(&self, qualified_name: &str) -> u64;
 }
 

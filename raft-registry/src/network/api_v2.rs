@@ -6,7 +6,7 @@ use poem_openapi::{
 };
 use registry_api::{
     AnchorDef, AnchorFeatureDef, CreationResponse, DerivedFeatureDef, Entities, Entity,
-    EntityLineage, FeathrApiRequest, ProjectDef, SourceDef,
+    EntityLineage, FeathrApiRequest, ProjectDef, SourceDef, ApiError,
 };
 use uuid::Uuid;
 
@@ -223,6 +223,58 @@ impl FeathrApiV2 {
     }
 
     #[oai(
+        path = "/projects/:project/datasources/:source/versions",
+        method = "get",
+        tag = "ApiTags::DataSource"
+    )]
+    async fn get_datasource_versions(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        source: Path<String>,
+    ) -> poem::Result<Json<Entities>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetProjectDataSourceVersions {
+                    project_id_or_name: project.0,
+                    id_or_name: source.0,
+                },
+            )
+            .await
+            .into_entities()
+            .map(Json)
+    }
+
+    #[oai(
+        path = "/projects/:project/datasources/:source/versions/:version",
+        method = "get",
+        tag = "ApiTags::DataSource"
+    )]
+    async fn get_datasource_version(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        source: Path<String>,
+        version: Path<String>,
+    ) -> poem::Result<Json<Entity>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetProjectDataSourceVersion {
+                    project_id_or_name: project.0,
+                    id_or_name: source.0,
+                    version: parse_version(version.0)?,
+                },
+            )
+            .await
+            .into_entity()
+            .map(Json)
+    }
+
+    #[oai(
         path = "/projects/:project/derivedfeatures",
         method = "get",
         tag = "ApiTags::DerivedFeature"
@@ -277,6 +329,83 @@ impl FeathrApiV2 {
             .await
             .into_uuid()
             .map(|v| Json(v.into()))
+    }
+
+    #[oai(
+        path = "/projects/:project/derivedfeatures/:feature",
+        method = "get",
+        tag = "ApiTags::DerivedFeature"
+    )]
+    async fn get_project_derived_feature(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        feature: Path<String>,
+    ) -> poem::Result<Json<Entity>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetProjectDerivedFeature {
+                    project_id_or_name: project.0,
+                    id_or_name: feature.0,
+                },
+            )
+            .await
+            .into_entity()
+            .map(Json)
+    }
+
+    #[oai(
+        path = "/projects/:project/derivedfeatures/:feature/versions",
+        method = "get",
+        tag = "ApiTags::DerivedFeature"
+    )]
+    async fn get_project_derived_feature_versions(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        feature: Path<String>,
+    ) -> poem::Result<Json<Entities>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetProjectDerivedFeatureVersions {
+                    project_id_or_name: project.0,
+                    id_or_name: feature.0,
+                },
+            )
+            .await
+            .into_entities()
+            .map(Json)
+    }
+
+    #[oai(
+        path = "/projects/:project/derivedfeatures/:feature/versions/:version",
+        method = "get",
+        tag = "ApiTags::DerivedFeature"
+    )]
+    async fn get_project_derived_feature_version(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        feature: Path<String>,
+        version: Path<String>
+    ) -> poem::Result<Json<Entity>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetProjectDerivedFeatureVersion {
+                    project_id_or_name: project.0,
+                    id_or_name: feature.0,
+                    version: parse_version(version.0)?,
+                },
+            )
+            .await
+            .into_entity()
+            .map(Json)
     }
 
     #[oai(
@@ -362,6 +491,58 @@ impl FeathrApiV2 {
     }
 
     #[oai(
+        path = "/projects/:project/anchors/:anchor/versions",
+        method = "get",
+        tag = "ApiTags::Anchor"
+    )]
+    async fn get_anchor_versions(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        anchor: Path<String>,
+    ) -> poem::Result<Json<Entities>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetProjectAnchorVersions {
+                    project_id_or_name: project.0,
+                    id_or_name: anchor.0,
+                },
+            )
+            .await
+            .into_entities()
+            .map(Json)
+    }
+
+    #[oai(
+        path = "/projects/:project/anchors/:anchor/versions/:version",
+        method = "get",
+        tag = "ApiTags::Anchor"
+    )]
+    async fn get_anchor_version(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        anchor: Path<String>,
+        version: Path<String>
+    ) -> poem::Result<Json<Entity>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetProjectAnchorVersion {
+                    project_id_or_name: project.0,
+                    id_or_name: anchor.0,
+                    version: parse_version(version.0)?,
+                },
+            )
+            .await
+            .into_entity()
+            .map(Json)
+    }
+
+    #[oai(
         path = "/projects/:project/anchors/:anchor/features",
         method = "get",
         tag = "ApiTags::AnchorFeature"
@@ -422,6 +603,89 @@ impl FeathrApiV2 {
             .map(|v| Json(v.into()))
     }
 
+    #[oai(
+        path = "/projects/:project/anchors/:anchor/features/:feature",
+        method = "get",
+        tag = "ApiTags::AnchorFeature"
+    )]
+    async fn get_project_anchor_feature(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        anchor: Path<String>,
+        feature: Path<String>,
+    ) -> poem::Result<Json<Entity>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetAnchorFeature {
+                    project_id_or_name: project.0,
+                    anchor_id_or_name: anchor.0,
+                    id_or_name: feature.0,
+                },
+            )
+            .await
+            .into_entity()
+            .map(Json)
+    }
+
+    #[oai(
+        path = "/projects/:project/anchors/:anchor/features/:feature/versions",
+        method = "get",
+        tag = "ApiTags::AnchorFeature"
+    )]
+    async fn get_project_anchor_feature_versions(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        anchor: Path<String>,
+        feature: Path<String>,
+    ) -> poem::Result<Json<Entities>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetAnchorFeatureVersions {
+                    project_id_or_name: project.0,
+                    anchor_id_or_name: anchor.0,
+                    id_or_name: feature.0,
+                },
+            )
+            .await
+            .into_entities()
+            .map(Json)
+    }
+
+    #[oai(
+        path = "/projects/:project/anchors/:anchor/features/:feature/versions/:version",
+        method = "get",
+        tag = "ApiTags::AnchorFeature"
+    )]
+    async fn get_project_anchor_feature_version(
+        &self,
+        data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-opt-seq")] opt_seq: Header<Option<u64>>,
+        project: Path<String>,
+        anchor: Path<String>,
+        feature: Path<String>,
+        version: Path<String>,
+    ) -> poem::Result<Json<Entity>> {
+        data.0
+            .request(
+                opt_seq.0,
+                FeathrApiRequest::GetAnchorFeatureVersion {
+                    project_id_or_name: project.0,
+                    anchor_id_or_name: anchor.0,
+                    id_or_name: feature.0,
+                    version: parse_version(version.0)?,
+                },
+            )
+            .await
+            .into_entity()
+            .map(Json)
+    }
+
     #[oai(path = "/features/:feature", method = "get", tag = "ApiTags::Feature")]
     async fn get_feature(
         &self,
@@ -462,5 +726,30 @@ impl FeathrApiV2 {
             .await
             .into_lineage()
             .map(Json)
+    }
+}
+
+fn parse_version<T>(v: T) -> Result<Option<u64>, ApiError>
+where
+    T: AsRef<str>
+{
+    if v.as_ref() =="latest" {
+        return Ok(None);
+    }
+    Ok(Some(v.as_ref().parse().map_err(|_| ApiError::BadRequest(format!("Invalid version spec {}", v.as_ref())))?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_version;
+
+    #[test]
+    fn test_parse_version() {
+        assert!(parse_version("").is_err());
+        assert!(parse_version("xyz").is_err());
+        assert!(parse_version("123xyz").is_err());
+        assert!(parse_version("latest").unwrap().is_none());
+        assert_eq!(parse_version("1").unwrap(), Some(1));
+        assert_eq!(parse_version("42").unwrap(), Some(42));
     }
 }
