@@ -10,6 +10,7 @@ log = "0.4"
 async-trait = "0.1"
 anyhow = "1"
 thiserror = "1"
+itertools = "0.10"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -27,7 +28,7 @@ bb8-tiberius = { version = "0.11", features = [
     "default",
     "tls",
 ], default-features = false, optional = true }
-sqlx = { version = "0.5", features = [
+sqlx = { version = "0.6.0", features = [
     "runtime-tokio-rustls",
     "any",
     "uuid",

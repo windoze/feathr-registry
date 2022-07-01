@@ -91,10 +91,17 @@ impl From<Vec<registry_provider::Entity<EntityProperty>>> for Entities {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 #[oai(rename_all = "camelCase")]
+pub struct EntityUniqueAttributes {
+    pub qualified_name: String,
+    pub version: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
+#[oai(rename_all = "camelCase")]
 pub struct EntityRef {
     guid: String,
     type_name: String,
-    unique_attributes: HashMap<String, String>,
+    unique_attributes: EntityUniqueAttributes,
 }
 
 impl EntityRef {
@@ -105,9 +112,10 @@ impl EntityRef {
         Self {
             guid: e.id.to_string(),
             type_name: e.entity_type.get_name().to_string(),
-            unique_attributes: [("qualifiedName".to_string(), format!("{}:{}", e.qualified_name, e.version))]
-                .into_iter()
-                .collect(),
+            unique_attributes: EntityUniqueAttributes {
+                qualified_name: e.qualified_name.to_owned(),
+                version: e.version,
+            },
         }
     }
 }
@@ -120,8 +128,18 @@ pub struct EntityLineage {
     pub relations: Vec<Relationship>,
 }
 
-impl From<(Vec<registry_provider::Entity<EntityProperty>>, Vec<registry_provider::Edge>)> for EntityLineage {
-    fn from((entities, edges): (Vec<registry_provider::Entity<EntityProperty>>, Vec<registry_provider::Edge>)) -> Self {
+impl
+    From<(
+        Vec<registry_provider::Entity<EntityProperty>>,
+        Vec<registry_provider::Edge>,
+    )> for EntityLineage
+{
+    fn from(
+        (entities, edges): (
+            Vec<registry_provider::Entity<EntityProperty>>,
+            Vec<registry_provider::Edge>,
+        ),
+    ) -> Self {
         let guid_entity_map: HashMap<String, Entity> = entities
             .into_iter()
             .map(|e| (e.id.to_string(), e.into()))
@@ -135,10 +153,8 @@ impl From<(Vec<registry_provider::Entity<EntityProperty>>, Vec<registry_provider
 
 impl From<(Vec<Entity>, Vec<registry_provider::Edge>)> for EntityLineage {
     fn from((entities, edges): (Vec<Entity>, Vec<registry_provider::Edge>)) -> Self {
-        let guid_entity_map: HashMap<String, Entity> = entities
-            .into_iter()
-            .map(|e| (e.guid.clone(), e))
-            .collect();
+        let guid_entity_map: HashMap<String, Entity> =
+            entities.into_iter().map(|e| (e.guid.clone(), e)).collect();
         Self {
             guid_entity_map,
             relations: edges.into_iter().map(|e| e.into()).collect(),

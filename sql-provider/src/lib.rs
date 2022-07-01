@@ -183,7 +183,7 @@ where
                         prop,
                     )
                     .await?;
-                self.index_entity(project_id)?;
+                self.index_entity(project_id, true)?;
                 Ok(project_id)
             }
         }
@@ -219,7 +219,7 @@ where
 
         self.connect(project_id, source_id, EdgeType::Contains)?;
 
-        self.index_entity(source_id)?;
+        self.index_entity(source_id, true)?;
         Ok(source_id)
     }
 
@@ -278,7 +278,7 @@ where
 
         self.connect(anchor_id, definition.source_id, EdgeType::Consumes)?;
 
-        self.index_entity(anchor_id)?;
+        self.index_entity(anchor_id, true)?;
         Ok(anchor_id)
     }
 
@@ -330,7 +330,7 @@ where
             self.connect(feature_id, s.id, EdgeType::Consumes)?;
         }
 
-        self.index_entity(feature_id)?;
+        self.index_entity(feature_id, true)?;
         Ok(feature_id)
     }
 
@@ -401,7 +401,7 @@ where
             self.connect(feature_id, id, EdgeType::Consumes)?;
         }
 
-        self.index_entity(feature_id)?;
+        self.index_entity(feature_id, true)?;
         Ok(feature_id)
     }
 

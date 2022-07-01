@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use itertools::Itertools;
 use log::debug;
 use petgraph::{
     graph::{EdgeIndex, Graph, NodeIndex},
@@ -142,7 +143,7 @@ where
         + Deserialize<'de>,
 {
     pub fn from_content(
-        mut graph: Graph<Entity<EntityProp>, Edge, Directed>,
+        graph: Graph<Entity<EntityProp>, Edge, Directed>,
         deleted: HashSet<Uuid>,
     ) -> Self {
         let fts_index = FtsIndex::new();
@@ -150,17 +151,13 @@ where
             .node_indices()
             .filter_map(|idx| graph.node_weight(idx).map(|w| (w.id, idx)))
             .collect();
-        // let name_id_map = graph
-        //     .node_weights()
-        //     .map(|w| (w.qualified_name.to_owned(), w.id))
-        //     .collect();
-        let mut name_id_map: HashMap<String, BTreeMap<u64, Uuid>> = Default::default();
-        for w in graph.node_weights_mut() {
-            let e = name_id_map.entry(w.qualified_name.clone()).or_default();
-            let version = e.keys().max().cloned().unwrap_or_default() + 1;
-            w.set_version(version);
-            e.insert(version, w.id);
-        }
+        let name_id_map: HashMap<String, BTreeMap<u64, Uuid>> = graph
+            .node_weights()
+            .map(|w| (&w.qualified_name, (w.version, w.id)))
+            .group_by(|v| v.0.to_owned())
+            .into_iter()
+            .map(|(k, v)| (k, v.map(|v| v.1).collect()))
+            .collect();
         let entry_points = graph
             .node_indices()
             .filter(|&idx| {
@@ -182,8 +179,9 @@ where
         let ids: Vec<_> = ret.node_id_map.keys().copied().collect();
 
         ids.into_iter().for_each(|id| {
-            ret.index_entity(id.to_owned()).ok();
+            ret.index_entity(id.to_owned(), false).ok();
         });
+        ret.fts_index.commit().ok();
 
         ret
     }
@@ -244,7 +242,7 @@ where
 
         self.fts_index.enable(true);
         for id in ids {
-            self.index_entity(id).ok();
+            self.index_entity(id, false).ok();
         }
         self.fts_index.commit()?;
 
@@ -531,7 +529,7 @@ where
             .name_id_map
             .get(&qualified_name.to_string())
             .map(|versions| versions.keys().any(|&v| properties.get_version() == v))
-            .unwrap_or_default() 
+            .unwrap_or_default()
         {
             // Try to create an existing version
             return Err(RegistryError::EntityNameExists(qualified_name.to_string()));
@@ -548,14 +546,18 @@ where
         Ok(uuid)
     }
 
-    pub fn index_entity(&mut self, id: Uuid) -> Result<(), RegistryError> {
+    pub fn index_entity(&mut self, id: Uuid, commit: bool) -> Result<(), RegistryError> {
         if let Some(e) = self.get_entity_by_id(id) {
             let scopes = self
                 .get_neighbors(id, EdgeType::BelongsTo)?
                 .iter()
                 .map(|e| e.id.to_string())
                 .collect();
-            self.fts_index.index(&e, scopes)?;
+            if commit {
+                self.fts_index.index(&e, scopes)?;
+            } else {
+                self.fts_index.add_doc(&e, scopes)?;
+            }
         }
         Ok(())
     }
