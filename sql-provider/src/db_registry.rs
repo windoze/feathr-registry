@@ -414,7 +414,7 @@ where
     pub(crate) fn get_feature_upstream(
         &self,
         uuid: Uuid,
-        size_limit: usize,
+        size_limit: Option<usize>,
     ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError> {
         self.bfs_traversal(
             uuid,
@@ -432,7 +432,7 @@ where
     pub(crate) fn get_feature_downstream(
         &self,
         uuid: Uuid,
-        size_limit: usize,
+        size_limit: Option<usize>,
     ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError> {
         self.bfs_traversal(
             uuid,
@@ -445,7 +445,7 @@ where
     pub(crate) fn bfs_traversal<FN, FE>(
         &self,
         uuid: Uuid,
-        size_limit: usize,
+        size_limit: Option<usize>,
         entity_pred: FN,
         edge_pred: FE,
     ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError>
@@ -453,6 +453,7 @@ where
         FN: Fn(&Entity<EntityProp>) -> bool,
         FE: Fn(&Edge) -> bool,
     {
+        let size_limit = size_limit.unwrap_or(usize::MAX);
         let idx = self.get_idx(uuid)?;
         let mut entities: Vec<NodeIndex> = vec![idx];
         let mut edges: Vec<EdgeIndex> = vec![];
@@ -1097,7 +1098,7 @@ mod tests {
             .find(|e| e.name == "derived_feature2")
             .map(|e| e.id)
             .unwrap();
-        let (entities, edges) = r.get_feature_upstream(df2, 50).unwrap();
+        let (entities, edges) = r.get_feature_upstream(df2, None).unwrap();
         let mut upstream_names: Vec<String> = entities
             .into_iter()
             .map(|w| format!("{}", w.name))
@@ -1275,7 +1276,7 @@ mod tests {
             Uuid::parse_str("226b42ee-0c34-4329-b935-744aecc63fb4").unwrap()
         );
 
-        let (f, e) = r.get_feature_upstream(uid, 100).unwrap();
+        let (f, e) = r.get_feature_upstream(uid, None).unwrap();
         println!("{:#?}\n{:#?}", f, e);
     }
 

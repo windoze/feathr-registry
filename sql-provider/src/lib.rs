@@ -122,7 +122,7 @@ where
         &self,
         uuid: Uuid,
         edge_type: EdgeType,
-        size_limit: usize,
+        size_limit: Option<usize>,
     ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError> {
         self.bfs_traversal(uuid, size_limit, |_| true, |e| e.edge_type == edge_type)
     }

@@ -801,15 +801,16 @@ where
                     debug!("Feature name: {}", id_or_name);
                     let id = get_id(this, id_or_name)?;
                     let (up_entities, up_edges) = this
-                        .bfs(id, registry_provider::EdgeType::Consumes, 100)
+                        .bfs(id, registry_provider::EdgeType::Consumes, None)
                         .map_api_error()?;
                     let (down_entities, down_edges) = this
-                        .bfs(id, registry_provider::EdgeType::Produces, 100)
+                        .bfs(id, registry_provider::EdgeType::Produces, None)
                         .map_api_error()?;
                     (
                         up_entities
                             .into_iter()
                             .chain(down_entities.into_iter())
+                            .map(|e| fill_entity(this, e))
                             .collect::<Vec<_>>(),
                         up_edges
                             .into_iter()

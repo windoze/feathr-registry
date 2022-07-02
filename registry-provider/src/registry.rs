@@ -83,7 +83,7 @@ where
         &self,
         uuid: Uuid,
         edge_type: EdgeType,
-        size_limit: usize,
+        size_limit: Option<usize>,
     ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError>;
 
     /**
@@ -235,7 +235,7 @@ where
     fn get_lineage(
         &self,
         id: Uuid,
-        size_limit: usize,
+        size_limit: Option<usize>,
     ) -> Result<(Vec<Entity<EntityProp>>, Vec<Edge>), RegistryError> {
         let (upstream, upstream_edges) = self.bfs(id, EdgeType::Consumes, size_limit)?;
         let (downstream, downstream_edges) = self.bfs(id, EdgeType::Produces, size_limit)?;
