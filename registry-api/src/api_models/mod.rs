@@ -29,6 +29,8 @@ pub struct ProjectDef {
     pub qualified_name: String,
     #[oai(default)]
     pub tags: HashMap<String, String>,
+    #[oai(skip)]
+    pub created_by: String,
 }
 
 impl TryInto<registry_provider::ProjectDef> for ProjectDef {
@@ -39,6 +41,7 @@ impl TryInto<registry_provider::ProjectDef> for ProjectDef {
             id: Uuid::parse_str(&self.id).map_err(|e| ApiError::BadRequest(e.to_string()))?,
             qualified_name: self.qualified_name,
             tags: self.tags,
+            created_by: self.created_by,
         })
     }
 }
@@ -82,6 +85,8 @@ pub struct SourceDef {
     #[oai(default)]
     #[serde(default)]
     pub tags: HashMap<String, String>,
+    #[oai(skip)]
+    pub created_by: String,
 }
 
 impl TryInto<registry_provider::SourceDef> for SourceDef {
@@ -102,6 +107,7 @@ impl TryInto<registry_provider::SourceDef> for SourceDef {
             timestamp_format: self.timestamp_format,
             preprocessing: self.preprocessing,
             tags: self.tags,
+            created_by: self.created_by,
         })
     }
 }
@@ -118,6 +124,8 @@ pub struct AnchorDef {
     pub source_id: String,
     #[oai(default)]
     pub tags: HashMap<String, String>,
+    #[oai(skip)]
+    pub created_by: String,
 }
 
 impl TryInto<registry_provider::AnchorDef> for AnchorDef {
@@ -130,6 +138,7 @@ impl TryInto<registry_provider::AnchorDef> for AnchorDef {
             qualified_name: self.qualified_name,
             source_id: parse_uuid(&self.source_id)?,
             tags: self.tags,
+            created_by: self.created_by,
         })
     }
 }
@@ -359,6 +368,8 @@ pub struct AnchorFeatureDef {
     pub key: Vec<TypedKey>,
     #[oai(default)]
     pub tags: HashMap<String, String>,
+    #[oai(skip)]
+    pub created_by: String,
 }
 
 impl TryInto<registry_provider::AnchorFeatureDef> for AnchorFeatureDef {
@@ -377,6 +388,7 @@ impl TryInto<registry_provider::AnchorFeatureDef> for AnchorFeatureDef {
                 .map(|e| e.try_into())
                 .collect::<Result<_, _>>()?,
             tags: self.tags,
+            created_by: self.created_by,
         })
     }
 }
@@ -399,6 +411,8 @@ pub struct DerivedFeatureDef {
     pub input_derived_features: Vec<String>,
     #[oai(default)]
     pub tags: HashMap<String, String>,
+    #[oai(skip)]
+    pub created_by: String,
 }
 
 impl TryInto<registry_provider::DerivedFeatureDef> for DerivedFeatureDef {
@@ -427,6 +441,7 @@ impl TryInto<registry_provider::DerivedFeatureDef> for DerivedFeatureDef {
                 .map(|s| parse_uuid(&s))
                 .collect::<Result<_, _>>()?,
             tags: self.tags,
+            created_by: self.created_by,
         })
     }
 }

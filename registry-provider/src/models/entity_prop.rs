@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -28,6 +29,8 @@ pub struct EntityProperty {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub tags: HashMap<String, String>,
     pub version: u64,
+    pub created_by: String,
+    pub created_on: DateTime<Utc>,
     #[serde(flatten)]
     pub attributes: Attributes,
 }
@@ -50,6 +53,8 @@ impl EntityPropMutator for EntityProperty {
             labels: Default::default(),
             attributes: Attributes::Project,
             version: 0,
+            created_by: definition.created_by.to_owned(),
+            created_on: Utc::now(),
         })
     }
     fn new_source(definition: &SourceDef) -> Result<Self, RegistryError> {
@@ -73,6 +78,8 @@ impl EntityPropMutator for EntityProperty {
                 type_: definition.source_type.to_owned(),
             }),
             version: 0,
+            created_by: definition.created_by.to_owned(),
+            created_on: Utc::now(),
         })
     }
     fn new_anchor(definition: &AnchorDef) -> Result<Self, RegistryError> {
@@ -86,6 +93,8 @@ impl EntityPropMutator for EntityProperty {
             labels: Default::default(),
             attributes: Attributes::Anchor,
             version: 0,
+            created_by: definition.created_by.to_owned(),
+            created_on: Utc::now(),
         })
     }
     fn new_anchor_feature(definition: &AnchorFeatureDef) -> Result<Self, RegistryError> {
@@ -103,6 +112,8 @@ impl EntityPropMutator for EntityProperty {
                 key: definition.key.to_owned(),
             }),
             version: 0,
+            created_by: definition.created_by.to_owned(),
+            created_on: Utc::now(),
         })
     }
     fn new_derived_feature(definition: &DerivedFeatureDef) -> Result<Self, RegistryError> {
@@ -120,6 +131,8 @@ impl EntityPropMutator for EntityProperty {
                 key: definition.key.to_owned(),
             }),
             version: 0,
+            created_by: definition.created_by.to_owned(),
+            created_on: Utc::now(),
         })
     }
     fn get_version(&self) -> u64 {

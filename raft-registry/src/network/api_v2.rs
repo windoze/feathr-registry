@@ -53,11 +53,15 @@ impl FeathrApiV2 {
     async fn new_project(
         &self,
         data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-requestor")] creator: Header<Option<String>>,
         def: Json<ProjectDef>,
     ) -> poem::Result<Json<CreationResponse>> {
         let mut definition = def.0;
         if definition.id.is_empty() {
             definition.id = Uuid::new_v4().to_string();
+        }
+        if definition.created_by.is_empty() {
+            definition.created_by = creator.0.unwrap_or_default();
         }
         data.0
             .request(
@@ -177,12 +181,16 @@ impl FeathrApiV2 {
     async fn new_datasource(
         &self,
         data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-requestor")] creator: Header<Option<String>>,
         project: Path<String>,
         def: Json<SourceDef>,
     ) -> poem::Result<Json<CreationResponse>> {
         let mut definition = def.0;
         if definition.id.is_empty() {
             definition.id = Uuid::new_v4().to_string();
+        }
+        if definition.created_by.is_empty() {
+            definition.created_by = creator.0.unwrap_or_default();
         }
         data.0
             .request(
@@ -311,12 +319,16 @@ impl FeathrApiV2 {
     async fn new_derived_feature(
         &self,
         data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-requestor")] creator: Header<Option<String>>,
         project: Path<String>,
         def: Json<DerivedFeatureDef>,
     ) -> poem::Result<Json<CreationResponse>> {
         let mut definition = def.0;
         if definition.id.is_empty() {
             definition.id = Uuid::new_v4().to_string();
+        }
+        if definition.created_by.is_empty() {
+            definition.created_by = creator.0.unwrap_or_default();
         }
         data.0
             .request(
@@ -445,12 +457,16 @@ impl FeathrApiV2 {
     async fn new_anchor(
         &self,
         data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-requestor")] creator: Header<Option<String>>,
         project: Path<String>,
         def: Json<AnchorDef>,
     ) -> poem::Result<Json<CreationResponse>> {
         let mut definition = def.0;
         if definition.id.is_empty() {
             definition.id = Uuid::new_v4().to_string();
+        }
+        if definition.created_by.is_empty() {
+            definition.created_by = creator.0.unwrap_or_default();
         }
         data.0
             .request(
@@ -581,6 +597,7 @@ impl FeathrApiV2 {
     async fn new_anchor_feature(
         &self,
         data: Data<&RaftRegistryApp>,
+        #[oai(name = "x-registry-requestor")] creator: Header<Option<String>>,
         project: Path<String>,
         anchor: Path<String>,
         def: Json<AnchorFeatureDef>,
@@ -588,6 +605,9 @@ impl FeathrApiV2 {
         let mut definition = def.0;
         if definition.id.is_empty() {
             definition.id = Uuid::new_v4().to_string();
+        }
+        if definition.created_by.is_empty() {
+            definition.created_by = creator.0.unwrap_or_default();
         }
         data.0
             .request(

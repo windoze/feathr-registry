@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use chrono::{Utc, DateTime};
 use poem_openapi::{Enum, Object};
 use registry_provider::EntityProperty;
 use serde::{Deserialize, Serialize};
@@ -50,6 +51,8 @@ pub struct Entity {
     pub display_text: String,
     pub labels: Vec<String>,
     pub attributes: EntityAttributes,
+    pub created_by: String,
+    pub created_on: DateTime<Utc>,
 }
 
 impl From<registry_provider::Entity<EntityProperty>> for Entity {
@@ -63,6 +66,8 @@ impl From<registry_provider::Entity<EntityProperty>> for Entity {
             status: format!("{:?}", v.properties.status),
             display_text: v.properties.display_text.clone(),
             labels: v.properties.labels.clone(),
+            created_by: v.properties.created_by.clone(),
+            created_on: v.properties.created_on.clone(),
             attributes: v.properties.into(),
         }
     }

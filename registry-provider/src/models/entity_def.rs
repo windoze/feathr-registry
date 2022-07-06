@@ -10,6 +10,7 @@ use crate::{FeatureType, FeatureTransformation, TypedKey};
 pub struct ProjectDef {
     pub id: Uuid,
     pub qualified_name: String,
+    pub created_by: String,
     pub tags: HashMap<String, String>,
 }
 
@@ -29,6 +30,7 @@ pub struct SourceDef {
     pub event_timestamp_column: Option<String>,
     pub timestamp_format: Option<String>,
     pub preprocessing: Option<String>,
+    pub created_by: String,
     pub tags: HashMap<String, String>,
 }
 
@@ -39,6 +41,7 @@ pub struct AnchorDef {
     pub name: String,
     pub qualified_name: String,
     pub source_id: Uuid,
+    pub created_by: String,
     pub tags: HashMap<String, String>,
 }
 
@@ -51,6 +54,7 @@ pub struct AnchorFeatureDef {
     pub feature_type: FeatureType,
     pub transformation: FeatureTransformation,
     pub key: Vec<TypedKey>,
+    pub created_by: String,
     pub tags: HashMap<String, String>,
 }
 
@@ -65,5 +69,6 @@ pub struct DerivedFeatureDef {
     pub key: Vec<TypedKey>,
     pub input_anchor_features: HashSet<Uuid>,
     pub input_derived_features: HashSet<Uuid>,
+    pub created_by: String,
     pub tags: HashMap<String, String>,
 }
