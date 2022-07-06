@@ -103,6 +103,7 @@ where
         entity.serialize_field("name", &self.name)?;
         entity.serialize_field("qualified_name", &self.qualified_name)?;
         entity.serialize_field("properties", &self.properties)?;
+        entity.serialize_field("version", &self.version)?;
         entity.end()
     }
 }

@@ -9,6 +9,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use log::debug;
 use openraft::{
     storage::{LogState, Snapshot},
     AnyError, EffectiveMembership, Entry, EntryPayload, ErrorSubject, ErrorVerb, LogId,
@@ -193,7 +194,16 @@ impl RaftLogReader<RegistryTypeConfig> for Arc<RegistryStore> {
         let response = log
             .range(transform_range_bound(range))
             .map(|res| res.unwrap())
-            .map(|(_, val)| serde_json::from_slice::<Entry<RegistryTypeConfig>>(&*val).unwrap())
+            .map(|(_, val)| {
+                serde_json::from_slice::<Entry<RegistryTypeConfig>>(&*val)
+                    .map_err(|e| {
+                        let v = val.clone().to_vec();
+                        let s = String::from_utf8_lossy(&v);
+                        debug!("val: '{}'", s);
+                        e
+                    })
+                    .unwrap()
+            })
             .collect();
 
         Ok(response)
