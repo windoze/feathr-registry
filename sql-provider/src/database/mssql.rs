@@ -138,8 +138,7 @@ pub async fn load_registry() -> Result<Registry<EntityProperty>, anyhow::Error> 
     Ok(registry)
 }
 
-pub async fn load_content(
-) -> Result<(Vec<Entity<EntityProperty>>, Vec<Edge>), anyhow::Error> {
+pub async fn load_content() -> Result<(Vec<Entity<EntityProperty>>, Vec<Edge>), anyhow::Error> {
     debug!("Loading registry data from database");
     let mut conn = connect().await?;
     let edges = load_edges(&mut conn).await?;
@@ -244,24 +243,21 @@ impl ExternalStorage<EntityProperty> for MsSqlStorage {
 
     async fn connect(
         &mut self,
-        _from: &Entity<EntityProperty>,
         from_id: Uuid,
-        _to: &Entity<EntityProperty>,
         to_id: Uuid,
         edge_type: EdgeType,
-        edge_id: Uuid,
     ) -> Result<(), RegistryError> {
         let mut conn = connect()
             .await
             .map_err(|e| RegistryError::ExternalStorageError(format!("{:?}", e)))?;
         conn.execute(
             format!(
-                r#"IF NOT EXISTS (SELECT 1 FROM {} WHERE from_id=@P2 and to_id=@P3 and edge_type=@P4)
+                r#"IF NOT EXISTS (SELECT 1 FROM {} WHERE from_id=@P1 and to_id=@P2 and edge_type=@P3)
                 BEGIN
                     INSERT INTO {}
-                    (edge_id, from_id, to_id, edge_type)
+                    (from_id, to_id, edge_type)
                     values
-                    (@P1, @P2, @P3, @P4)
+                    (@P1, @P2, @P3)
                 END"#,
                 self.edge_table, self.edge_table
             )
@@ -270,7 +266,6 @@ impl ExternalStorage<EntityProperty> for MsSqlStorage {
                 s
             }),
             &[
-                &edge_id.to_string(),
                 &from_id.to_string(),
                 &to_id.to_string(),
                 &format!("{:?}", edge_type),
@@ -351,12 +346,7 @@ mod tests {
             .map(|e| e.id)
             .collect();
         for sub in subs {
-            r.connect(
-                sub,
-                project,
-                EdgeType::BelongsTo,
-            )
-            .unwrap();
+            r.connect(sub, project, EdgeType::BelongsTo).await.unwrap();
         }
         r
     }

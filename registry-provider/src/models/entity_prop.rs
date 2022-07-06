@@ -26,7 +26,7 @@ pub struct EntityProperty {
     pub status: EntityStatus,
     pub display_text: String,
     pub labels: Vec<String>,
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub tags: HashMap<String, String>,
     pub version: u64,
     pub created_by: String,
@@ -147,7 +147,13 @@ impl From<EntityProperty> for Entity<EntityProperty> {
     fn from(v: EntityProperty) -> Self {
         Entity::<EntityProperty> {
             id: v.guid,
-            entity_type: EntityType::AnchorFeature,
+            entity_type: match v.attributes {
+                Attributes::AnchorFeature(_) => EntityType::AnchorFeature,
+                Attributes::DerivedFeature(_) => EntityType::DerivedFeature,
+                Attributes::Anchor => EntityType::Anchor,
+                Attributes::Source(_) => EntityType::Source,
+                Attributes::Project => EntityType::Project,
+            },
             name: v.name.to_owned(),
             qualified_name: v.qualified_name.to_owned(),
             version: 0,

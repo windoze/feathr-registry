@@ -217,7 +217,8 @@ where
             )
             .await?;
 
-        self.connect(project_id, source_id, EdgeType::Contains)?;
+        self.connect(project_id, source_id, EdgeType::Contains)
+            .await?;
 
         self.index_entity(source_id, true)?;
         Ok(source_id)
@@ -274,9 +275,11 @@ where
             )
             .await?;
 
-        self.connect(project_id, anchor_id, EdgeType::Contains)?;
+        self.connect(project_id, anchor_id, EdgeType::Contains)
+            .await?;
 
-        self.connect(anchor_id, definition.source_id, EdgeType::Consumes)?;
+        self.connect(anchor_id, definition.source_id, EdgeType::Consumes)
+            .await?;
 
         self.index_entity(anchor_id, true)?;
         Ok(anchor_id)
@@ -320,14 +323,16 @@ where
             )
             .await?;
 
-        self.connect(project_id, feature_id, EdgeType::Contains)?;
+        self.connect(project_id, feature_id, EdgeType::Contains)
+            .await?;
 
-        self.connect(anchor_id, feature_id, EdgeType::Contains)?;
+        self.connect(anchor_id, feature_id, EdgeType::Contains)
+            .await?;
 
         // Anchor feature also consumes source of the anchor
         let sources = self.get_neighbors(anchor_id, EdgeType::Consumes)?;
         for s in sources {
-            self.connect(feature_id, s.id, EdgeType::Consumes)?;
+            self.connect(feature_id, s.id, EdgeType::Consumes).await?;
         }
 
         self.index_entity(feature_id, true)?;
@@ -391,14 +396,15 @@ where
             )
             .await?;
 
-        self.connect(project_id, feature_id, EdgeType::Contains)?;
+        self.connect(project_id, feature_id, EdgeType::Contains)
+            .await?;
 
         for &id in definition
             .input_anchor_features
             .iter()
             .chain(definition.input_derived_features.iter())
         {
-            self.connect(feature_id, id, EdgeType::Consumes)?;
+            self.connect(feature_id, id, EdgeType::Consumes).await?;
         }
 
         self.index_entity(feature_id, true)?;

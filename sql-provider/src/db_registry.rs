@@ -61,12 +61,9 @@ where
      */
     async fn connect(
         &mut self,
-        from: &Entity<EntityProp>,
         from_id: Uuid,
-        to: &Entity<EntityProp>,
         to_id: Uuid,
         edge_type: EdgeType,
-        edge_id: Uuid,
     ) -> Result<(), RegistryError>;
 
     /**
@@ -236,15 +233,26 @@ where
             }
         }
 
-        edges.for_each(|e| {
-            self.connect(e.from, e.to, e.edge_type).ok();
-        });
+        for e in edges {
+            self.connect(e.from, e.to, e.edge_type).await.ok();
+        }
 
         self.fts_index.enable(true);
         for id in ids {
             self.index_entity(id, false).ok();
         }
         self.fts_index.commit()?;
+
+        self.entry_points = self
+            .graph
+            .node_indices()
+            .filter(|&idx| {
+                self.graph
+                    .node_weight(idx)
+                    .map(|w| (w.entity_type.is_entry_point()))
+                    .unwrap_or(false)
+            })
+            .collect();
 
         Ok(())
     }
@@ -614,7 +622,7 @@ where
         // TODO: How to deal with FTS?
     }
 
-    pub fn connect(
+    pub async fn connect(
         &mut self,
         from: Uuid,
         to: Uuid,
@@ -634,6 +642,10 @@ where
                 .unwrap_or_default(),
             edge_type,
         );
+        for storage in &self.external_storage {
+            let storage = storage.clone();
+            storage.write().await.connect(from, to, edge_type).await?;
+        }
         match self
             .graph
             .edges_connecting(from_idx, to_idx)
@@ -831,17 +843,11 @@ mod tests {
 
         async fn connect(
             &mut self,
-            from: &Entity<DummyEntityProp>,
-            _from_id: Uuid,
-            to: &Entity<DummyEntityProp>,
-            _to_id: Uuid,
+            from_id: Uuid,
+            to_id: Uuid,
             edge_type: EdgeType,
-            _edge_id: Uuid,
         ) -> Result<(), RegistryError> {
-            debug!(
-                "Adding edge: '{}' '{:?}' '{}'",
-                from.name, edge_type, to.name
-            );
+            debug!("Adding edge: '{}' '{:?}' '{}'", from_id, edge_type, to_id);
             Ok(())
         }
 
@@ -958,29 +964,75 @@ mod tests {
             )
             .await
             .unwrap();
-        r.connect(idx_prj1, idx_src1, EdgeType::Contains).unwrap(); // Project1 contains Source1
-        r.connect(idx_prj1, idx_an1, EdgeType::Contains).unwrap(); // Project1 contains Anchor1
-        r.connect(idx_an1, idx_src1, EdgeType::Consumes).unwrap(); // Anchor1 consumes Source1
-        r.connect(idx_prj1, idx_af1, EdgeType::Contains).unwrap(); // Project1 contains AnchorFeature1
-        r.connect(idx_prj1, idx_af2, EdgeType::Contains).unwrap(); // Project1 contains AnchorFeature2
-        r.connect(idx_prj1, idx_af3, EdgeType::Contains).unwrap(); // Project1 contains AnchorFeature3
-        r.connect(idx_prj1, idx_af4, EdgeType::Contains).unwrap(); // Project1 contains AnchorFeature4
-        r.connect(idx_an1, idx_af1, EdgeType::Contains).unwrap(); // Anchor1 contains AnchorFeature1
-        r.connect(idx_an1, idx_af2, EdgeType::Contains).unwrap(); // Anchor1 contains AnchorFeature2
-        r.connect(idx_an1, idx_af3, EdgeType::Contains).unwrap(); // Anchor1 contains AnchorFeature3
-        r.connect(idx_an1, idx_af4, EdgeType::Contains).unwrap(); // Anchor1 contains AnchorFeature4
-        r.connect(idx_src1, idx_af1, EdgeType::Produces).unwrap(); // Source1 produces AnchorFeature1
-        r.connect(idx_src1, idx_af2, EdgeType::Produces).unwrap(); // Source1 produces AnchorFeature2
-        r.connect(idx_src1, idx_af3, EdgeType::Produces).unwrap(); // Source1 produces AnchorFeature3
-        r.connect(idx_src1, idx_af4, EdgeType::Produces).unwrap(); // Source1 produces AnchorFeature4
-        r.connect(idx_prj1, idx_df1, EdgeType::Contains).unwrap(); // Project1 contains DerivedFeature1
-        r.connect(idx_prj1, idx_df2, EdgeType::Contains).unwrap(); // Project1 contains DerivedFeature2
-        r.connect(idx_prj1, idx_df3, EdgeType::Contains).unwrap(); // Project1 contains DerivedFeature3
-        r.connect(idx_af1, idx_df1, EdgeType::Produces).unwrap(); // AnchorFeature1 derives DerivedFeature1
-        r.connect(idx_af2, idx_df2, EdgeType::Produces).unwrap(); // AnchorFeature2 derives DerivedFeature2
-        r.connect(idx_af3, idx_df2, EdgeType::Produces).unwrap(); // AnchorFeature3 derives DerivedFeature2
-        r.connect(idx_af4, idx_df3, EdgeType::Produces).unwrap(); // AnchorFeature4 derives DerivedFeature3
-        r.connect(idx_df2, idx_df3, EdgeType::Produces).unwrap(); // DerivedFeature2 derives DerivedFeature3
+        r.connect(idx_prj1, idx_src1, EdgeType::Contains)
+            .await
+            .unwrap(); // Project1 contains Source1
+        r.connect(idx_prj1, idx_an1, EdgeType::Contains)
+            .await
+            .unwrap(); // Project1 contains Anchor1
+        r.connect(idx_an1, idx_src1, EdgeType::Consumes)
+            .await
+            .unwrap(); // Anchor1 consumes Source1
+        r.connect(idx_prj1, idx_af1, EdgeType::Contains)
+            .await
+            .unwrap(); // Project1 contains AnchorFeature1
+        r.connect(idx_prj1, idx_af2, EdgeType::Contains)
+            .await
+            .unwrap(); // Project1 contains AnchorFeature2
+        r.connect(idx_prj1, idx_af3, EdgeType::Contains)
+            .await
+            .unwrap(); // Project1 contains AnchorFeature3
+        r.connect(idx_prj1, idx_af4, EdgeType::Contains)
+            .await
+            .unwrap(); // Project1 contains AnchorFeature4
+        r.connect(idx_an1, idx_af1, EdgeType::Contains)
+            .await
+            .unwrap(); // Anchor1 contains AnchorFeature1
+        r.connect(idx_an1, idx_af2, EdgeType::Contains)
+            .await
+            .unwrap(); // Anchor1 contains AnchorFeature2
+        r.connect(idx_an1, idx_af3, EdgeType::Contains)
+            .await
+            .unwrap(); // Anchor1 contains AnchorFeature3
+        r.connect(idx_an1, idx_af4, EdgeType::Contains)
+            .await
+            .unwrap(); // Anchor1 contains AnchorFeature4
+        r.connect(idx_src1, idx_af1, EdgeType::Produces)
+            .await
+            .unwrap(); // Source1 produces AnchorFeature1
+        r.connect(idx_src1, idx_af2, EdgeType::Produces)
+            .await
+            .unwrap(); // Source1 produces AnchorFeature2
+        r.connect(idx_src1, idx_af3, EdgeType::Produces)
+            .await
+            .unwrap(); // Source1 produces AnchorFeature3
+        r.connect(idx_src1, idx_af4, EdgeType::Produces)
+            .await
+            .unwrap(); // Source1 produces AnchorFeature4
+        r.connect(idx_prj1, idx_df1, EdgeType::Contains)
+            .await
+            .unwrap(); // Project1 contains DerivedFeature1
+        r.connect(idx_prj1, idx_df2, EdgeType::Contains)
+            .await
+            .unwrap(); // Project1 contains DerivedFeature2
+        r.connect(idx_prj1, idx_df3, EdgeType::Contains)
+            .await
+            .unwrap(); // Project1 contains DerivedFeature3
+        r.connect(idx_af1, idx_df1, EdgeType::Produces)
+            .await
+            .unwrap(); // AnchorFeature1 derives DerivedFeature1
+        r.connect(idx_af2, idx_df2, EdgeType::Produces)
+            .await
+            .unwrap(); // AnchorFeature2 derives DerivedFeature2
+        r.connect(idx_af3, idx_df2, EdgeType::Produces)
+            .await
+            .unwrap(); // AnchorFeature3 derives DerivedFeature2
+        r.connect(idx_af4, idx_df3, EdgeType::Produces)
+            .await
+            .unwrap(); // AnchorFeature4 derives DerivedFeature3
+        r.connect(idx_df2, idx_df3, EdgeType::Produces)
+            .await
+            .unwrap(); // DerivedFeature2 derives DerivedFeature3
 
         // Project 2
         let idx_prj2 = r
@@ -1032,21 +1084,41 @@ mod tests {
             )
             .await
             .unwrap();
-        r.connect(idx_prj2, idx_src2_1, EdgeType::Contains).unwrap(); // Project2 contains Source2_1
-        r.connect(idx_prj2, idx_an2_1, EdgeType::Contains).unwrap(); // Project2 contains Anchor2_1
+        r.connect(idx_prj2, idx_src2_1, EdgeType::Contains)
+            .await
+            .unwrap(); // Project2 contains Source2_1
+        r.connect(idx_prj2, idx_an2_1, EdgeType::Contains)
+            .await
+            .unwrap(); // Project2 contains Anchor2_1
         r.connect(idx_an2_1, idx_src2_1, EdgeType::Consumes)
+            .await
             .unwrap(); // Anchor2_1 consumes Source2_1
-        r.connect(idx_prj2, idx_af2_1, EdgeType::Contains).unwrap(); // Project2 contains AnchorFeature2_1
-        r.connect(idx_prj2, idx_af2_2, EdgeType::Contains).unwrap(); // Project2 contains AnchorFeature2_2
-        r.connect(idx_prj2, idx_af2_3, EdgeType::Contains).unwrap(); // Project2 contains AnchorFeature2_3
-        r.connect(idx_an2_1, idx_af2_1, EdgeType::Contains).unwrap(); // Anchor2_1 contains AnchorFeature2_1
-        r.connect(idx_an2_1, idx_af2_2, EdgeType::Contains).unwrap(); // Anchor2_1 contains AnchorFeature2_2
-        r.connect(idx_an2_1, idx_af2_3, EdgeType::Contains).unwrap(); // Anchor2_1 contains AnchorFeature2_3
+        r.connect(idx_prj2, idx_af2_1, EdgeType::Contains)
+            .await
+            .unwrap(); // Project2 contains AnchorFeature2_1
+        r.connect(idx_prj2, idx_af2_2, EdgeType::Contains)
+            .await
+            .unwrap(); // Project2 contains AnchorFeature2_2
+        r.connect(idx_prj2, idx_af2_3, EdgeType::Contains)
+            .await
+            .unwrap(); // Project2 contains AnchorFeature2_3
+        r.connect(idx_an2_1, idx_af2_1, EdgeType::Contains)
+            .await
+            .unwrap(); // Anchor2_1 contains AnchorFeature2_1
+        r.connect(idx_an2_1, idx_af2_2, EdgeType::Contains)
+            .await
+            .unwrap(); // Anchor2_1 contains AnchorFeature2_2
+        r.connect(idx_an2_1, idx_af2_3, EdgeType::Contains)
+            .await
+            .unwrap(); // Anchor2_1 contains AnchorFeature2_3
         r.connect(idx_src2_1, idx_af2_1, EdgeType::Produces)
+            .await
             .unwrap(); // Source2_1 produces AnchorFeature2_1
         r.connect(idx_src2_1, idx_af2_2, EdgeType::Produces)
+            .await
             .unwrap(); // Source2_1 produces AnchorFeature2_2
         r.connect(idx_src2_1, idx_af2_3, EdgeType::Produces)
+            .await
             .unwrap(); // Source2_1 produces AnchorFeature2_3
 
         r
@@ -1167,7 +1239,7 @@ mod tests {
                 )
                 .await
                 .unwrap();
-            r.connect(prj1, an, EdgeType::Contains).unwrap();
+            r.connect(prj1, an, EdgeType::Contains).await.unwrap();
             // create 1000 anchor features in each group
             for j in 0..ANCHOR_FEATURES {
                 let f = r
@@ -1180,8 +1252,8 @@ mod tests {
                     .await
                     .unwrap();
                 features.push(f);
-                r.connect(f, prj1, EdgeType::BelongsTo).unwrap();
-                r.connect(f, an, EdgeType::BelongsTo).unwrap();
+                r.connect(f, prj1, EdgeType::BelongsTo).await.unwrap();
+                r.connect(f, an, EdgeType::BelongsTo).await.unwrap();
             }
             let end = Instant::now();
             println!("Took {} ms", (end - start).as_millis());
@@ -1206,10 +1278,10 @@ mod tests {
             let count: usize = rng.gen_range(2..10);
             for _ in 0..count {
                 let id = features[rng.gen_range(0..features.len())];
-                r.connect(f, id, EdgeType::Consumes).unwrap();
+                r.connect(f, id, EdgeType::Consumes).await.unwrap();
             }
             features.push(f);
-            r.connect(f, prj1, EdgeType::BelongsTo).unwrap();
+            r.connect(f, prj1, EdgeType::BelongsTo).await.unwrap();
         }
         let end = Instant::now();
         let time = end - start;
@@ -1244,9 +1316,9 @@ mod tests {
             .await
             .unwrap();
 
-        r.connect(prj1, src1, EdgeType::Contains).unwrap();
-        r.connect(prj1, an1, EdgeType::Contains).unwrap();
-        r.connect(src1, an1, EdgeType::Produces).unwrap();
+        r.connect(prj1, src1, EdgeType::Contains).await.unwrap();
+        r.connect(prj1, an1, EdgeType::Contains).await.unwrap();
+        r.connect(src1, an1, EdgeType::Produces).await.unwrap();
 
         // Now graph should have 3 nodes and 3 edges
 

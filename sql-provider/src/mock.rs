@@ -43,6 +43,7 @@ pub async fn load() -> crate::Registry<EntityProperty> {
             project,
             EdgeType::BelongsTo,
         )
+        .await
         .unwrap();
     }
     r
