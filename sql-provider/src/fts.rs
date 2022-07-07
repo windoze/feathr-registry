@@ -6,11 +6,45 @@ use tantivy::{
     collector::TopDocs,
     doc,
     query::{BooleanQuery, Query, QueryParser, TermQuery},
-    schema::{Field, IndexRecordOption, Schema, TextFieldIndexing, STRING, TEXT},
+    schema::{
+        Cardinality, Field, IndexRecordOption, NumericOptions, Schema, TextFieldIndexing, STRING,
+        TEXT,
+    },
     Index, IndexReader, IndexWriter, ReloadPolicy, Term,
 };
 use thiserror::Error;
 use uuid::Uuid;
+
+/**
+ * HACK: Tantivy doesn't support sorting by string field.
+ * This function converts the first 12 alphanumerical characters to a number so that it can be sorted.
+ * We only use 12 characters because `(26+10)^13` is too large for `u64`.
+ */
+fn str_score(s: &str) -> u64 {
+    const FILL: [u8; 12] = [0; 12];
+    let mut ret: u64 = 0;
+    for c in s
+        .as_bytes()
+        .iter()
+        .filter_map(|b| {
+            if b >= &b'0' && b <= &b'9' {
+                Some(*b - b'0')
+            } else if b >= &b'a' && b <= &b'z' {
+                Some(*b - b'a' + 10)
+            } else if b >= &b'A' && b <= &b'Z' {
+                Some(*b - b'A' + 10)
+            } else {
+                None
+            }
+        })
+        .chain(FILL.iter().map(|&x| x))
+        .take(12)
+    {
+        ret = ret.wrapping_mul(36).wrapping_add(c as u64);
+    }
+    // Tantivy sorts scores in descending order.
+    u64::MAX - ret
+}
 
 #[derive(Debug, Error)]
 pub enum FtsError {
@@ -31,6 +65,7 @@ pub struct FtsIndex {
     scopes_field: Field,
     type_field: Field,
     body_field: Field,
+    name_score_field: Field,
     enabled: bool,
 }
 
@@ -44,6 +79,7 @@ impl Debug for FtsIndex {
             .field("scopes_field", &self.scopes_field)
             .field("type_field", &self.type_field)
             .field("body_field", &self.body_field)
+            .field("name_score_field", &self.body_field)
             .field("enabled", &self.enabled)
             .finish()
     }
@@ -63,12 +99,17 @@ impl FtsIndex {
         );
         schema_builder.add_text_field("type", STRING);
         schema_builder.add_text_field("body", TEXT.set_indexing_options(indexing_option));
+        schema_builder.add_u64_field(
+            "name_score",
+            NumericOptions::default().set_fast(Cardinality::SingleValue),
+        );
         let schema = schema_builder.build();
         let name_field = schema.get_field("name").unwrap();
         let id_field = schema.get_field("id").unwrap();
         let scopes_field = schema.get_field("scopes").unwrap();
         let type_field = schema.get_field("type").unwrap();
         let body_field = schema.get_field("body").unwrap();
+        let name_score_field = schema.get_field("name_score").unwrap();
         let index = Index::create_in_ram(schema.clone());
         Self {
             _schema: schema,
@@ -84,6 +125,7 @@ impl FtsIndex {
             scopes_field,
             type_field,
             body_field,
+            name_score_field,
             enabled: true,
         }
     }
@@ -103,6 +145,7 @@ impl FtsIndex {
             self.scopes_field => scopes.join(" "),
             self.type_field => d.get_type(),
             self.body_field => d.get_body(),
+            self.name_score_field => str_score(&d.get_name()),
         );
         self.writer.as_ref().unwrap().add_document(doc)?;
         Ok(())
@@ -178,7 +221,12 @@ impl FtsIndex {
                 ])),
             }
         };
-        let top_docs = searcher.search(&query, &TopDocs::with_limit(limit).and_offset(offset))?;
+        let top_docs = searcher.search(
+            &query,
+            &TopDocs::with_limit(limit)
+                .and_offset(offset)
+                .order_by_u64_field(self.name_score_field),
+        )?;
         Ok(top_docs
             .into_iter()
             .filter_map(|(_, addr)| {
@@ -249,7 +297,11 @@ mod tests {
                 body: format!("This is the body of name{}", i),
             };
             docs.insert(id, a.clone());
-            fts.add_doc(&a, vec![format!("scope-{}", i % 2), format!("scope-{}", i % 5)]).unwrap();
+            fts.add_doc(
+                &a,
+                vec![format!("scope-{}", i % 2), format!("scope-{}", i % 5)],
+            )
+            .unwrap();
         }
         fts.commit().unwrap();
         let ids = fts

@@ -373,8 +373,13 @@ where
             let scope_id = get_id(t, id_or_name)?;
 
             if keyword.is_blank() {
-                t.get_children(scope_id, types)
-                    .map(|es| es.into_iter().map(|e| fill_entity(t, e)).collect())
+                let children = t
+                    .get_children(scope_id, types)
+                    .map(|es| es.into_iter().map(|e| fill_entity(t, e)).collect());
+                children.map(|mut es: Vec<_>| {
+                    es.sort_by_key(|e| e.name.clone());
+                    es
+                })
             } else {
                 search_entities(t, keyword, size, offset, types, Some(scope_id))
             }
@@ -501,6 +506,7 @@ where
                             for e in entities {
                                 es.push(fill_entity(this, e))
                             }
+                            es.sort_by_key(|e| e.name.clone());
                             Ok(es)
                         }
                         Err(e) => Err(e),
@@ -598,7 +604,9 @@ where
                 } => {
                     let (_, source_id) = get_child_id(this, project_id_or_name, id_or_name)?;
                     let source = this.get_entity(source_id).map(|e| fill_entity(this, e))?;
-                    this.get_all_versions(&source.qualified_name).into()
+                    let mut ret = this.get_all_versions(&source.qualified_name);
+                    ret.sort_by_key(|e| e.version);
+                    ret.into()
                 }
                 FeathrApiRequest::GetProjectDataSourceVersion {
                     project_id_or_name,
@@ -657,7 +665,9 @@ where
                 } => {
                     let (_, anchor_id) = get_child_id(this, project_id_or_name, id_or_name)?;
                     let anchor = this.get_entity(anchor_id).map(|e| fill_entity(this, e))?;
-                    this.get_all_versions(&anchor.qualified_name).into()
+                    let mut ret = this.get_all_versions(&anchor.qualified_name);
+                    ret.sort_by_key(|e| e.version);
+                    ret.into()
                 }
                 FeathrApiRequest::GetProjectAnchorVersion {
                     project_id_or_name,
@@ -710,7 +720,9 @@ where
                 } => {
                     let (_, feature_id) = get_child_id(this, project_id_or_name, id_or_name)?;
                     let f = this.get_entity(feature_id)?;
-                    this.get_all_versions(&f.qualified_name).into()
+                    let mut ret = this.get_all_versions(&f.qualified_name);
+                    ret.sort_by_key(|e| e.version);
+                    ret.into()
                 }
                 FeathrApiRequest::GetProjectDerivedFeatureVersion {
                     project_id_or_name,
@@ -767,7 +779,9 @@ where
                     let (_, anchor_id) = get_child_id(this, project_id_or_name, anchor_id_or_name)?;
                     let (_, feature_id) = get_child_id(this, anchor_id.to_string(), id_or_name)?;
                     let f = this.get_entity(feature_id)?;
-                    this.get_all_versions(&f.qualified_name).into()
+                    let mut ret = this.get_all_versions(&f.qualified_name);
+                    ret.sort_by_key(|e| e.version);
+                    ret.into()
                 }
                 FeathrApiRequest::GetAnchorFeatureVersion {
                     project_id_or_name,
