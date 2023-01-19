@@ -67,7 +67,7 @@ impl From<registry_provider::Entity<EntityProperty>> for Entity {
             display_text: v.properties.display_text.clone(),
             labels: v.properties.labels.clone(),
             created_by: v.properties.created_by.clone(),
-            created_on: v.properties.created_on.clone(),
+            created_on: v.properties.created_on,
             attributes: v.properties.into(),
         }
     }

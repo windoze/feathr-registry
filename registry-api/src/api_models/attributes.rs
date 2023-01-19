@@ -41,8 +41,8 @@ impl From<registry_provider::VectorType> for VectorType {
     }
 }
 
-impl Into<registry_provider::VectorType> for VectorType {
-    fn into(self) -> registry_provider::VectorType {
+impl From<VectorType> for registry_provider::VectorType {
+    fn from(_val: VectorType) -> Self {
         registry_provider::VectorType::TENSOR
     }
 }
@@ -69,9 +69,9 @@ impl From<registry_provider::TensorCategory> for TensorCategory {
     }
 }
 
-impl Into<registry_provider::TensorCategory> for TensorCategory {
-    fn into(self) -> registry_provider::TensorCategory {
-        match self {
+impl From<TensorCategory> for registry_provider::TensorCategory {
+    fn from(val: TensorCategory) -> Self {
+        match val {
             TensorCategory::DENSE => registry_provider::TensorCategory::DENSE,
             TensorCategory::SPARSE => registry_provider::TensorCategory::SPARSE,
         }
@@ -93,9 +93,9 @@ impl From<registry_provider::ValueType> for ValueType {
     }
 }
 
-impl Into<registry_provider::ValueType> for ValueType {
-    fn into(self) -> registry_provider::ValueType {
-        match self {
+impl From<ValueType> for registry_provider::ValueType {
+    fn from(val: ValueType) -> Self {
+        match val {
             ValueType::UNSPECIFIED => registry_provider::ValueType::UNSPECIFIED,
             ValueType::BOOL => registry_provider::ValueType::BOOL,
             ValueType::INT32 => registry_provider::ValueType::INT32,
@@ -125,16 +125,8 @@ pub struct ProjectAttributes {
 pub struct SourceAttributes {
     pub qualified_name: String,
     pub name: String,
-    #[oai(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
-    pub dbtable: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
-    pub query: Option<String>,
-    #[oai(skip_serializing_if = "Option::is_none")]
-    pub auth: Option<String>,
+    #[oai(default, flatten)]
+    pub options: HashMap<String, serde_json::Value>,
     #[oai(skip_serializing_if = "Option::is_none")]
     pub preprocessing: Option<String>,
     #[oai(skip_serializing_if = "Option::is_none")]
@@ -196,24 +188,28 @@ pub enum EntityAttributes {
 impl From<registry_provider::EntityProperty> for EntityAttributes {
     fn from(v: registry_provider::EntityProperty) -> Self {
         match v.attributes {
-            registry_provider::Attributes::AnchorFeature(attr) => Self::AnchorFeature(AnchorFeatureAttributes {
-                qualified_name: v.qualified_name,
-                name: v.name,
-                tags: v.tags,
-                type_: attr.type_.into(),
-                transformation: attr.transformation.into(),
-                key: attr.key.into_iter().map(|e| e.into()).collect(),
-            }),
-            registry_provider::Attributes::DerivedFeature(attr) => Self::DerivedFeature(DerivedFeatureAttributes {
-                qualified_name: v.qualified_name,
-                name: v.name,
-                tags: v.tags,
-                type_: attr.type_.into(),
-                transformation: attr.transformation.into(),
-                key: attr.key.into_iter().map(|e| e.into()).collect(),
-                input_anchor_features: Default::default(),
-                input_derived_features: Default::default(),
-            }),
+            registry_provider::Attributes::AnchorFeature(attr) => {
+                Self::AnchorFeature(AnchorFeatureAttributes {
+                    qualified_name: v.qualified_name,
+                    name: v.name,
+                    tags: v.tags,
+                    type_: attr.type_.into(),
+                    transformation: attr.transformation.into(),
+                    key: attr.key.into_iter().map(|e| e.into()).collect(),
+                })
+            }
+            registry_provider::Attributes::DerivedFeature(attr) => {
+                Self::DerivedFeature(DerivedFeatureAttributes {
+                    qualified_name: v.qualified_name,
+                    name: v.name,
+                    tags: v.tags,
+                    type_: attr.type_.into(),
+                    transformation: attr.transformation.into(),
+                    key: attr.key.into_iter().map(|e| e.into()).collect(),
+                    input_anchor_features: Default::default(),
+                    input_derived_features: Default::default(),
+                })
+            }
             registry_provider::Attributes::Anchor => Self::Anchor(AnchorAttributes {
                 qualified_name: v.qualified_name,
                 name: v.name,
@@ -225,16 +221,12 @@ impl From<registry_provider::EntityProperty> for EntityAttributes {
                 qualified_name: v.qualified_name,
                 name: v.name,
                 tags: v.tags,
-                path: attr.path,
-                url: attr.url,
-                dbtable: attr.dbtable,
-                query: attr.query,
-                auth: attr.auth,
+                options: attr.options,
                 preprocessing: attr.preprocessing,
                 event_timestamp_column: attr.event_timestamp_column,
                 timestamp_format: attr.timestamp_format,
                 type_: attr.type_,
-                }),
+            }),
             registry_provider::Attributes::Project => Self::Project(ProjectAttributes {
                 qualified_name: v.qualified_name,
                 name: v.name,

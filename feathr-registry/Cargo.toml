@@ -1,6 +1,6 @@
 [package]
 name = "feathr-registry"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -22,10 +22,9 @@ tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1.8"
 clap = { version = "3", features = ["derive", "env"] }
 openraft = { git = "https://github.com/windoze/openraft.git", features = ["serde"] }
-
 common-utils = { path = "../common-utils" }
 registry-provider = { path = "../registry-provider" }
-sql-provider = { path = "../sql-provider" }
+sql-provider = { path = "../sql-provider", features = ["default"] }
 registry-api = { path = "../registry-api" }
 raft-registry = { path = "../raft-registry" }
 

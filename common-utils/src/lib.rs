@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use log::trace;
+use thiserror::Error;
 
 /// `set!` macro works like `vec!`, but generates a HashSet.
 #[macro_export]
@@ -12,6 +13,19 @@ macro_rules! set {
             temp_set
         }
     };
+}
+
+#[derive(Error, Debug)]
+#[error("{0}")]
+pub struct StringError(String);
+
+impl StringError {
+    pub fn new<T>(s: T) -> Self
+    where
+        T: ToString,
+    {
+        StringError(s.to_string())
+    }
 }
 
 /// Log if `Result` is an error
@@ -65,8 +79,7 @@ impl<T> Appliable for T where T: Sized {}
 /**
  * Flip `Option<Result<T, E>>` to `Result<Option<T>, E>` so we can use `?` on the result
  */
-pub trait FlippedOptionResult<T, E>
-{
+pub trait FlippedOptionResult<T, E> {
     fn flip(self) -> Result<Option<T>, E>;
 }
 
@@ -78,9 +91,9 @@ impl<T, E> FlippedOptionResult<T, E> for Option<Result<T, E>> {
 
 pub fn is_default<T>(t: &T) -> bool
 where
-    T: Default + Eq
+    T: Default + Eq,
 {
-    t==&T::default()
+    t == &T::default()
 }
 
 pub trait Blank {
@@ -112,10 +125,17 @@ pub fn init_logger() {
             "registry_api",
             "registry_app",
         ];
-        let module_logs = modules.into_iter().map(|m| format!("{}=debug", m)).collect::<Vec<_>>().join(",");
-        let rust_log = format!("info,tantivy=warn,tiberius=warn,openraft=warn,{}", module_logs);
+        let module_logs = modules
+            .into_iter()
+            .map(|m| format!("{}=trace", m))
+            .collect::<Vec<_>>()
+            .join(",");
+        let rust_log = format!(
+            "info,tantivy=warn,tiberius=warn,openraft=warn,sqlx=warn,{}",
+            module_logs
+        );
         if std::env::var_os("RUST_LOG").is_none() {
-            std::env::set_var("RUST_LOG", &rust_log);
+            std::env::set_var("RUST_LOG", rust_log);
         }
         tracing_subscriber::fmt::init();
     });

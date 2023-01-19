@@ -21,9 +21,9 @@ impl From<registry_provider::EdgeType> for EdgeType {
     }
 }
 
-impl Into<registry_provider::EdgeType> for EdgeType {
-    fn into(self) -> registry_provider::EdgeType {
-        match self {
+impl From<EdgeType> for registry_provider::EdgeType {
+    fn from(val: EdgeType) -> Self {
+        match val {
             EdgeType::BelongsTo => registry_provider::EdgeType::BelongsTo,
             EdgeType::Contains => registry_provider::EdgeType::Contains,
             EdgeType::Consumes => registry_provider::EdgeType::Consumes,

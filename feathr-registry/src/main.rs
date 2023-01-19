@@ -1,4 +1,5 @@
 use std::{
+    convert::Infallible,
     fs::{read_dir, remove_dir_all},
     path::PathBuf,
     pin::Pin,
@@ -13,11 +14,13 @@ use log::{debug, info};
 use poem::{
     listener::TcpListener,
     middleware::{Cors, Tracing},
+    web::Json,
     EndpointExt, Route, Server,
 };
 use poem_openapi::OpenApiService;
 use raft_registry::{
-    management_routes, raft_routes, FeathrApiV2, NodeConfig, RaftRegistryApp, RaftSequencer, FeathrApiV1,
+    management_routes, raft_routes, FeathrApiV1, FeathrApiV2, NodeConfig, RaftRegistryApp,
+    RaftSequencer, RbacMiddleware,
 };
 use sql_provider::attach_storage;
 
@@ -146,7 +149,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let api_base = format!("/{}", options.api_base.trim_start_matches('/'));
     let http_addr = ext_http_addr
-        .trim_start_matches("http://")
+        .trim_start_matches("http://")  // Devskim: ignore DS137138
         .trim_start_matches("https://")
         .to_string();
 
@@ -155,7 +158,7 @@ async fn main() -> Result<(), anyhow::Error> {
         "Feathr Registry API Version 1",
         option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>"),
     )
-    .server(&format!("http://{}{}/v1", http_addr, api_base,));
+    .server(format!("http://{}{}/v1", http_addr, api_base,));  // Devskim: ignore DS137138
     let ui_v1 = api_service_v1.swagger_ui();
     let spec_v1 = api_service_v1.spec();
 
@@ -164,7 +167,7 @@ async fn main() -> Result<(), anyhow::Error> {
         "Feathr Registry API Version 2",
         option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>"),
     )
-    .server(&format!("http://{}{}/v2", http_addr, api_base,));
+    .server(format!("http://{}{}/v2", http_addr, api_base,));  // Devskim: ignore DS137138
     let ui_v2 = api_service_v2.swagger_ui();
     let spec_v2 = api_service_v2.spec();
 
@@ -173,20 +176,31 @@ async fn main() -> Result<(), anyhow::Error> {
         .nest("/v2", api_service_v2)
         .with(Tracing)
         .with(RaftSequencer::new(app.store.clone()))
-        .with(Cors::new());
-    
-    let docs_route = Route::new()
-        .nest("/v1", ui_v1)
-        .nest("/v2", ui_v2);
-    
+        .with(Cors::new())
+        .with(RbacMiddleware);
+
+    let docs_route = Route::new().nest("/v1", ui_v1).nest("/v2", ui_v2);
+
     let spec_route = Route::new()
-    .at("/v1", poem::endpoint::make_sync(move |_| spec_v1.clone()))
-    .at("/v2", poem::endpoint::make_sync(move |_| spec_v2.clone()));
+        .at("/v1", poem::endpoint::make_sync(move |_| spec_v1.clone()))
+        .at("/v2", poem::endpoint::make_sync(move |_| spec_v2.clone()));
 
     let route = management_routes(raft_routes(Route::new()))
         .nest("spec", spec_route)
         .nest("docs", docs_route)
-        .nest(api_base, api_route,)
+        .nest(api_base, api_route)
+        .nest(
+            "version",
+            poem::endpoint::make_sync(move |_| {
+                let version = option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown>");
+                Result::<_, Infallible>::Ok(Json(serde_json::json!({
+                    "version": version,
+                    "rbac": false,
+                    "backends": ["memory", "mssql", "mysql", "postgres"],
+                    "api_versions": ["v1", "v2"],
+                })))
+            }),
+        )
         .nest(
             "/",
             spa_endpoint::SpaEndpoint::new("./static-files", "index.html"),
@@ -195,7 +209,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let svc_task = async {
         Server::new(TcpListener::bind(
-            options.http_addr.trim_start_matches("http://"),
+            options.http_addr.trim_start_matches("http://"),  // Devskim: ignore DS137138
         ))
         .run(route)
         .await
@@ -220,7 +234,8 @@ async fn main() -> Result<(), anyhow::Error> {
         }
         Ok(())
     };
-    let tasks: Vec<Pin<Box<dyn Future<Output = anyhow::Result<()>>>>> = vec![Box::pin(svc_task), Box::pin(raft_task)];
+    let tasks: Vec<Pin<Box<dyn Future<Output = anyhow::Result<()>>>>> =
+        vec![Box::pin(svc_task), Box::pin(raft_task)];
     join_all(tasks.into_iter())
         .await
         .into_iter()

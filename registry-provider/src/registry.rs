@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgeType, Entity, EntityPropMutator,
-    EntityType, ProjectDef, RegistryError, SourceDef, ToDocString,
+    EntityType, ProjectDef, RbacRecord, RegistryError, SourceDef, ToDocString,
 };
 
 pub fn extract_version(name: &str) -> (&str, Option<u64>) {
@@ -37,6 +37,7 @@ where
         &mut self,
         entities: Vec<Entity<EntityProp>>,
         edges: Vec<Edge>,
+        permissions: Vec<RbacRecord>,
     ) -> Result<(), RegistryError>;
 
     /**
@@ -109,7 +110,7 @@ where
     /**
      * Create new project
      */
-    async fn new_project(&mut self, definition: &ProjectDef) -> Result<Uuid, RegistryError>;
+    async fn new_project(&mut self, definition: &ProjectDef) -> Result<(Uuid, u64), RegistryError>;
 
     /**
      * Create new source under specified project
@@ -118,7 +119,7 @@ where
         &mut self,
         project_id: Uuid,
         definition: &SourceDef,
-    ) -> Result<Uuid, RegistryError>;
+    ) -> Result<(Uuid, u64), RegistryError>;
 
     /**
      * Create new anchor under specified project
@@ -127,7 +128,7 @@ where
         &mut self,
         project_id: Uuid,
         definition: &AnchorDef,
-    ) -> Result<Uuid, RegistryError>;
+    ) -> Result<(Uuid, u64), RegistryError>;
 
     /**
      * Create new anchor feature under specified anchor
@@ -137,7 +138,7 @@ where
         project_id: Uuid,
         anchor_id: Uuid,
         definition: &AnchorFeatureDef,
-    ) -> Result<Uuid, RegistryError>;
+    ) -> Result<(Uuid, u64), RegistryError>;
 
     /**
      * Create new derived feature under specified project
@@ -146,7 +147,7 @@ where
         &mut self,
         project_id: Uuid,
         definition: &DerivedFeatureDef,
-    ) -> Result<Uuid, RegistryError>;
+    ) -> Result<(Uuid, u64), RegistryError>;
 
     async fn delete_entity(&mut self, id: Uuid) -> Result<(), RegistryError>;
 
@@ -229,6 +230,19 @@ where
             .collect())
     }
 
+    fn get_entity_project_id(&self, id: Uuid) -> Result<Uuid, RegistryError> {
+        if let Ok(e) = self.get_entity(id) {
+            if e.entity_type == EntityType::Project {
+                return Ok(e.id);
+            }
+        }
+        self.get_neighbors(id, EdgeType::BelongsTo)?
+            .into_iter()
+            .find(|e| e.entity_type == EntityType::Project)
+            .ok_or(RegistryError::InvalidEntity(id))
+            .map(|e| e.id)
+    }
+
     /**
      * Returns all entities that depend on this one and vice versa, directly and indirectly
      */
@@ -268,7 +282,7 @@ where
                 versions
                     .into_iter()
                     .find(|e| e.version == v)
-                    .ok_or(RegistryError::EntityNotFound(format!(
+                    .ok_or_else(|| RegistryError::EntityNotFound(format!(
                         "{}:{}",
                         qualified_name, v
                     )))
@@ -276,7 +290,7 @@ where
             None => versions
                 .last()
                 .cloned()
-                .ok_or(RegistryError::EntityNotFound(format!(
+                .ok_or_else(|| RegistryError::EntityNotFound(format!(
                     "{}:latest",
                     qualified_name
                 ))),

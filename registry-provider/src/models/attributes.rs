@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, collections::HashMap};
 use std::hash::Hash;
 
 use serde::{Deserialize, Serialize};
@@ -120,7 +120,6 @@ pub enum FeatureTransformation {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AnchorFeatureAttributes {
     #[serde(rename = "type")]
     pub type_: FeatureType,
@@ -137,26 +136,17 @@ pub struct DerivedFeatureAttributes {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SourceAttributes {
     #[serde(rename = "type")]
     pub type_: String,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dbtable: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub query: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub auth: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub preprocessing: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub event_timestamp_column: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub timestamp_format: Option<String>,
+    #[serde(default)]
+    pub options: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
