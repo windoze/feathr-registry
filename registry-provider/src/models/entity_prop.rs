@@ -17,8 +17,15 @@ pub enum EntityStatus {
     Deprecated,
 }
 
+fn default_version() -> u64 {
+    1
+}
+
+fn default_created_on() -> DateTime<Utc> {
+    Utc::now()
+}
+
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct EntityProperty {
     pub guid: Uuid,
     pub name: String,
@@ -28,10 +35,12 @@ pub struct EntityProperty {
     pub labels: Vec<String>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub tags: HashMap<String, String>,
+    #[serde(default = "default_version")]
     pub version: u64,
+    #[serde(default)]
     pub created_by: String,
+    #[serde(default = "default_created_on")]
     pub created_on: DateTime<Utc>,
-    #[serde(flatten)]
     pub attributes: Attributes,
 }
 
@@ -67,11 +76,7 @@ impl EntityPropMutator for EntityProperty {
             labels: Default::default(),
             tags: definition.tags.to_owned(),
             attributes: Attributes::Source(SourceAttributes {
-                path: definition.path.to_owned(),
-                url: definition.url.to_owned(),
-                dbtable: definition.dbtable.to_owned(),
-                query: definition.query.to_owned(),
-                auth: definition.auth.to_owned(),
+                options: definition.options.to_owned(),
                 preprocessing: definition.preprocessing.to_owned(),
                 event_timestamp_column: definition.event_timestamp_column.to_owned(),
                 timestamp_format: definition.timestamp_format.to_owned(),
@@ -159,5 +164,33 @@ impl From<EntityProperty> for Entity<EntityProperty> {
             version: 0,
             properties: v,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::EntityPropMutator;
+
+    #[test]
+    fn test_source_def() {
+        let s= r#"{
+            "id": "00000000-0000-0000-0000-000000000000",
+                      "qualifiedName": "test",
+            "name": "s2",
+            "type": "hdfs",
+            "path": "wasbs://public@azurefeathrstorage.blob.core.windows.net/sample_data/green_tripdata_2020-04.csv",
+            "preprocessing": "    def add_new_dropoff_and_fare_amount_column(df: DataFrame):\n        from pyspark.sql.functions import col\n        df = df.withColumn(\"new_lpep_dropoff_datetime\", col(\"lpep_dropoff_datetime\"))\n        df = df.withColumn(\"new_fare_amount\", col(\"fare_amount\") + 1000000)\n        return df\n",
+            "eventTimestampColumn": "lpep_dropoff_datetime",
+            "event_timestamp_column": "lpep_dropoff_datetime",
+            "timestampFormat": "yyyy-MM-dd HH:mm:ss",
+            "timestamp_format": "yyyy-MM-dd HH:mm:ss",
+            "createdBy": "a",
+            "tags": {
+              "for_test_purpose": "true"
+            }
+          }"#;
+        let sd = serde_json::from_str::<crate::SourceDef>(s).unwrap();
+        let ep = crate::EntityProperty::new_source(&sd).unwrap();
+        println!("{}", serde_json::to_string_pretty(&ep).unwrap());
     }
 }

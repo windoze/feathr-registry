@@ -1,5 +1,5 @@
 mod config;
-mod store;
+mod registry_store;
 
 use std::{
     fmt::Debug,
@@ -126,27 +126,21 @@ impl Restore for Arc<RegistryStore> {
             .next()
             .map(|res| res.unwrap())
             .map(|(_, val)| {
-                serde_json::from_slice::<Entry<RegistryTypeConfig>>(&*val)
+                serde_json::from_slice::<Entry<RegistryTypeConfig>>(&val)
                     .unwrap()
                     .log_id
             });
 
-        match first {
-            Some(x) => {
-                tracing::debug!("restore: first log id = {:?}", x);
-                let mut ld = self.last_purged_log_id.write().await;
-                *ld = Some(x);
-            }
-            None => {}
+        if let Some(x) = first {
+            tracing::debug!("restore: first log id = {:?}", x);
+            let mut ld = self.last_purged_log_id.write().await;
+            *ld = Some(x);
         }
 
         let snapshot = self.get_current_snapshot().await.unwrap();
 
-        match snapshot {
-            Some(ss) => {
-                self.install_snapshot(&ss.meta, ss.snapshot).await.unwrap();
-            }
-            None => {}
+        if let Some(ss) = snapshot {
+            self.install_snapshot(&ss.meta, ss.snapshot).await.unwrap();
         }
     }
 }
@@ -164,7 +158,7 @@ impl RaftLogReader<RegistryTypeConfig> for Arc<RegistryStore> {
             .next()
             .map(|res| res.unwrap())
             .map(|(_, val)| {
-                serde_json::from_slice::<Entry<RegistryTypeConfig>>(&*val)
+                serde_json::from_slice::<Entry<RegistryTypeConfig>>(&val)
                     .unwrap()
                     .log_id
             });
@@ -195,7 +189,7 @@ impl RaftLogReader<RegistryTypeConfig> for Arc<RegistryStore> {
             .range(transform_range_bound(range))
             .map(|res| res.unwrap())
             .map(|(_, val)| {
-                serde_json::from_slice::<Entry<RegistryTypeConfig>>(&*val)
+                serde_json::from_slice::<Entry<RegistryTypeConfig>>(&val)
                     .map_err(|e| {
                         let v = val.clone().to_vec();
                         let s = String::from_utf8_lossy(&v);
@@ -316,7 +310,7 @@ impl RaftStorage<RegistryTypeConfig> for Arc<RegistryStore> {
         match value {
             None => Ok(None),
             Some(val) => Ok(Some(
-                serde_json::from_slice::<Vote<RegistryNodeId>>(&*val).unwrap(),
+                serde_json::from_slice::<Vote<RegistryNodeId>>(&val).unwrap(),
             )),
         }
     }
@@ -334,7 +328,7 @@ impl RaftStorage<RegistryTypeConfig> for Arc<RegistryStore> {
         for entry in entries {
             log.insert(
                 entry.log_id.index.to_be_bytes(),
-                IVec::from(serde_json::to_vec(&*entry).unwrap()),
+                IVec::from(serde_json::to_vec(&entry).unwrap()),
             )
             .unwrap();
         }

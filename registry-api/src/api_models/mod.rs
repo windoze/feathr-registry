@@ -9,10 +9,12 @@ use crate::error::ApiError;
 mod attributes;
 mod edge;
 mod entity;
+mod rbac;
 
 pub use attributes::*;
 pub use edge::*;
 pub use entity::*;
+pub use rbac::*;
 
 fn parse_uuid(s: &str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(s).map_err(|_| ApiError::BadRequest(format!("Invalid GUID `{}`", s)))
@@ -47,7 +49,6 @@ impl TryInto<registry_provider::ProjectDef> for ProjectDef {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
-#[serde(rename_all = "camelCase")]
 #[oai(rename_all = "camelCase")]
 pub struct SourceDef {
     #[oai(skip)]
@@ -58,21 +59,9 @@ pub struct SourceDef {
     #[serde(rename = "type")]
     #[oai(rename = "type")]
     pub source_type: String,
-    #[oai(default)]
+    #[oai(default, flatten)]
     #[serde(default)]
-    pub path: Option<String>,
-    #[oai(default)]
-    #[serde(default)]
-    pub url: Option<String>,
-    #[oai(default)]
-    #[serde(default)]
-    pub dbtable: Option<String>,
-    #[oai(default)]
-    #[serde(default)]
-    pub query: Option<String>,
-    #[oai(default)]
-    #[serde(default)]
-    pub auth: Option<String>,
+    pub options: HashMap<String, serde_json::Value>,
     #[oai(default)]
     #[serde(default)]
     pub event_timestamp_column: Option<String>,
@@ -98,11 +87,7 @@ impl TryInto<registry_provider::SourceDef> for SourceDef {
             qualified_name: self.qualified_name,
             name: self.name,
             source_type: self.source_type,
-            path: self.path,
-            url: self.url,
-            dbtable: self.dbtable,
-            query: self.query,
-            auth: self.auth,
+            options: self.options,
             event_timestamp_column: self.event_timestamp_column,
             timestamp_format: self.timestamp_format,
             preprocessing: self.preprocessing,
@@ -256,9 +241,9 @@ impl From<registry_provider::Aggregation> for Aggregation {
     }
 }
 
-impl Into<registry_provider::Aggregation> for Aggregation {
-    fn into(self) -> registry_provider::Aggregation {
-        match self {
+impl From<Aggregation> for registry_provider::Aggregation {
+    fn from(val: Aggregation) -> Self {
+        match val {
             Aggregation::NOP => registry_provider::Aggregation::NOP,
             Aggregation::AVG => registry_provider::Aggregation::AVG,
             Aggregation::MAX => registry_provider::Aggregation::MAX,
@@ -449,6 +434,7 @@ impl TryInto<registry_provider::DerivedFeatureDef> for DerivedFeatureDef {
 #[derive(Clone, Debug, Serialize, Object)]
 pub struct CreationResponse {
     pub guid: String,
+    pub version: u64,
 }
 
 impl TryInto<Uuid> for CreationResponse {
@@ -459,10 +445,11 @@ impl TryInto<Uuid> for CreationResponse {
     }
 }
 
-impl From<Uuid> for CreationResponse {
-    fn from(id: Uuid) -> Self {
+impl From<(Uuid, u64)> for CreationResponse {
+    fn from((id, version): (Uuid, u64)) -> Self {
         Self {
             guid: id.to_string(),
+            version,
         }
     }
 }
@@ -474,13 +461,18 @@ mod tests {
     #[test]
     fn des_source() {
         let s = r#"{
+            "id": "00000000-0000-0000-0000-000000000000",
+            "qualified_name": "p1__nycTaxiBatchSource",
             "name": "nycTaxiBatchSource",
+            "created_by": "",
             "type": "jdbc",
-            "url": "jdbc:sqlserver://feathrtestsql4.database.windows.net:1433;database=testsql;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30;",
-            "dbtable": "green_tripdata_2020_04",
-            "auth": "USERPASS",
-            "eventTimestampColumn": "lpep_dropoff_datetime",
-            "timestampFormat": "yyyy-MM-dd HH:mm:ss"
+            "options": {
+                "url": "jdbc:sqlserver://feathrtestsql4.database.windows.net:1433;database=testsql;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30;",
+                "dbtable": "green_tripdata_2020_04",
+                "auth": "USERPASS",
+                "eventTimestampColumn": "lpep_dropoff_datetime",
+                "timestampFormat": "yyyy-MM-dd HH:mm:ss"
+            }
           }"#;
         let src: SourceDef = serde_json::from_str(s).unwrap();
         println!("{:#?}", src);

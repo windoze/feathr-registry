@@ -1,22 +1,20 @@
 mod database;
 mod db_registry;
 mod fts;
+mod rbac_map;
 mod serdes;
-
-#[cfg(any(mock, test))]
-mod mock;
 
 use std::collections::HashSet;
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-pub use database::{attach_storage, load_content, load_registry};
+pub use database::{attach_storage, load_content};
 pub use db_registry::Registry;
-use log::debug;
+use log::{debug, warn};
 use registry_provider::{
-    extract_version, AnchorDef, AnchorFeatureDef, DerivedFeatureDef, Edge, EdgeType, Entity,
-    EntityPropMutator, EntityType, ProjectDef, RegistryError, RegistryProvider, SourceDef,
-    ToDocString,
+    extract_version, AnchorDef, AnchorFeatureDef, Credential, DerivedFeatureDef, Edge, EdgeType,
+    Entity, EntityPropMutator, EntityType, Permission, ProjectDef, RbacError, RbacProvider,
+    RbacRecord, RegistryError, RegistryProvider, Resource, SourceDef, ToDocString,
 };
 use uuid::Uuid;
 
@@ -32,9 +30,12 @@ where
         &mut self,
         entities: Vec<Entity<EntityProp>>,
         edges: Vec<Edge>,
+        permissions: Vec<RbacRecord>,
     ) -> Result<(), RegistryError> {
         self.batch_load(entities.into_iter(), edges.into_iter())
-            .await
+            .await?;
+        self.load_permissions(permissions.into_iter())?;
+        Ok(())
     }
 
     /**
@@ -166,12 +167,12 @@ where
     }
 
     // Create new project
-    async fn new_project(&mut self, definition: &ProjectDef) -> Result<Uuid, RegistryError> {
+    async fn new_project(&mut self, definition: &ProjectDef) -> Result<(Uuid, u64), RegistryError> {
         // TODO: Pre-flight validation
         let mut prop = EntityProp::new_project(definition)?;
         match self.get_all_versions(&definition.qualified_name).last() {
             // It makes no sense to create a new version of a project
-            Some(e) => Ok(e.id),
+            Some(e) => Ok((e.id, e.version)),
             None => {
                 prop.set_version(1);
                 let project_id = self
@@ -184,7 +185,7 @@ where
                     )
                     .await?;
                 self.index_entity(project_id, true)?;
-                Ok(project_id)
+                Ok((project_id, 1))
             }
         }
     }
@@ -194,18 +195,19 @@ where
         &mut self,
         project_id: Uuid,
         definition: &SourceDef,
-    ) -> Result<Uuid, RegistryError> {
+    ) -> Result<(Uuid, u64), RegistryError> {
         // TODO: Pre-flight validation
         let mut prop = EntityProp::new_source(definition)?;
 
         for v in self.get_all_versions(&definition.qualified_name) {
             if v.properties == prop {
                 // Found an existing version that is same as the requested one
-                return Ok(v.id);
+                return Ok((v.id, v.version));
             }
         }
 
-        prop.set_version(self.get_next_version_number(&definition.qualified_name));
+        let version = self.get_next_version_number(&definition.qualified_name);
+        prop.set_version(version);
 
         let source_id = self
             .insert_entity(
@@ -221,7 +223,7 @@ where
             .await?;
 
         self.index_entity(source_id, true)?;
-        Ok(source_id)
+        Ok((source_id, version))
     }
 
     // Create new anchor under specified project
@@ -229,7 +231,7 @@ where
         &mut self,
         project_id: Uuid,
         definition: &AnchorDef,
-    ) -> Result<Uuid, RegistryError> {
+    ) -> Result<(Uuid, u64), RegistryError> {
         if self.get_entity_by_id(definition.source_id).is_none() {
             debug!(
                 "Source {} not found, cannot create anchor",
@@ -258,12 +260,13 @@ where
             })
         {
             // Found existing anchor with same name and source
-            return Ok(e.id);
+            return Ok((e.id, e.version));
         }
 
         // Create new version
         let mut prop = EntityProp::new_anchor(definition)?;
-        prop.set_version(self.get_next_version_number(&definition.qualified_name));
+        let version = self.get_next_version_number(&definition.qualified_name);
+        prop.set_version(version);
 
         let anchor_id = self
             .insert_entity(
@@ -282,7 +285,7 @@ where
             .await?;
 
         self.index_entity(anchor_id, true)?;
-        Ok(anchor_id)
+        Ok((anchor_id, version))
     }
 
     // Create new anchor feature under specified anchor
@@ -291,7 +294,7 @@ where
         project_id: Uuid,
         anchor_id: Uuid,
         definition: &AnchorFeatureDef,
-    ) -> Result<Uuid, RegistryError> {
+    ) -> Result<(Uuid, u64), RegistryError> {
         // TODO: Pre-flight validation
         let mut prop = EntityProp::new_anchor_feature(definition)?;
 
@@ -309,10 +312,11 @@ where
             })
         {
             // Found existing anchor with same name and source
-            return Ok(e.id);
+            return Ok((e.id, e.version));
         }
 
-        prop.set_version(self.get_next_version_number(&definition.qualified_name));
+        let version = self.get_next_version_number(&definition.qualified_name);
+        prop.set_version(version);
         let feature_id = self
             .insert_entity(
                 definition.id,
@@ -336,7 +340,7 @@ where
         }
 
         self.index_entity(feature_id, true)?;
-        Ok(feature_id)
+        Ok((feature_id, version))
     }
 
     // Create new derived feature under specified project
@@ -344,7 +348,7 @@ where
         &mut self,
         project_id: Uuid,
         definition: &DerivedFeatureDef,
-    ) -> Result<Uuid, RegistryError> {
+    ) -> Result<(Uuid, u64), RegistryError> {
         let input: HashSet<Uuid> = definition
             .input_anchor_features
             .iter()
@@ -382,10 +386,11 @@ where
                 upstream == input && prop == e.properties
             })
         {
-            return Ok(e.id);
+            return Ok((e.id, e.version));
         }
 
-        prop.set_version(self.get_next_version_number(&definition.qualified_name));
+        let version = self.get_next_version_number(&definition.qualified_name);
+        prop.set_version(version);
         let feature_id = self
             .insert_entity(
                 definition.id,
@@ -408,7 +413,7 @@ where
         }
 
         self.index_entity(feature_id, true)?;
-        Ok(feature_id)
+        Ok((feature_id, version))
     }
 
     async fn delete_entity(&mut self, id: Uuid) -> Result<(), RegistryError> {
@@ -434,5 +439,161 @@ where
             .cloned()
             .unwrap_or_default()
             + 1
+    }
+}
+
+#[async_trait]
+impl<EntityProp> RbacProvider for Registry<EntityProp>
+where
+    EntityProp: Clone + Debug + PartialEq + Eq + EntityPropMutator + ToDocString + Send + Sync,
+{
+    #[tracing::instrument(level = "trace", skip(self))]
+    fn check_permission(
+        &self,
+        credential: &Credential,
+        resource: &Resource,
+        permission: Permission,
+    ) -> Result<bool, RegistryError> {
+        if credential == &Credential::RbacDisabled {
+            return Ok(true);
+        }
+        // Get corresponding project to the resource
+        let resource = match resource {
+            Resource::NamedEntity(name) => {
+                let id = self.get_entity_id(name)?;
+                let proj_id = self.get_entity_project_id(id)?;
+                Resource::Entity(proj_id)
+            }
+            Resource::Entity(id) => {
+                let proj_id = self.get_entity_project_id(*id)?;
+                Resource::Entity(proj_id)
+            }
+            Resource::Global => Resource::Global,
+        };
+        // User must be either Global Admin or Project Admin or having the permission on the resource
+        Ok(self
+            .permission_map
+            .check_permission(credential, &Resource::Global, Permission::Admin)
+            || self
+                .permission_map
+                .check_permission(credential, &resource, Permission::Admin)
+            || self
+                .permission_map
+                .check_permission(credential, &resource, permission))
+    }
+
+    fn load_permissions<RI>(&mut self, permissions: RI) -> Result<(), RegistryError>
+    where
+        RI: Iterator<Item = RbacRecord>,
+    {
+        // Always use entity id as resource in the permission map
+        for mut record in permissions {
+            let resource = match &record.resource {
+                Resource::NamedEntity(name) => match name.parse::<Uuid>() {
+                    Ok(id) => Resource::Entity(id),
+                    Err(_) => Resource::Entity(match self.get_entity_by_name(name, None) {
+                        Some(e) => e.id,
+                        None => {
+                            warn!("Entity {} not found, skipped", name);
+                            continue;
+                        }
+                    }),
+                },
+                _ => record.resource,
+            };
+            record.resource = resource;
+            self.permission_map.grant_permission(&record);
+        }
+        Ok(())
+    }
+
+    fn get_permissions(&self) -> Result<Vec<RbacRecord>, RegistryError> {
+        self.permission_map
+            .iter()
+            .map(|(credential, permission, resource)| {
+                Ok(RbacRecord {
+                    credential: credential.to_owned(),
+                    resource: self.to_named_entity_resource(&resource.resource)?,
+                    permission: permission.to_owned(),
+                    requestor: resource.granted_by.to_owned(),
+                    reason: resource.reason.to_owned(),
+                    time: resource.granted_time,
+                })
+            })
+            .collect()
+    }
+
+    async fn grant_permission(&mut self, grant: &RbacRecord) -> Result<(), RegistryError> {
+        // User `granted_by` must have the permission to grant the permission
+        if !self.check_permission(&grant.requestor, &grant.resource, Permission::Admin)? {
+            return Err(RbacError::PermissionDenied(
+                grant.requestor.to_string(),
+                grant.resource.to_owned(),
+                grant.permission,
+            )
+            .into());
+        }
+
+        // Permission already granted, no need to do anything
+        if self.check_permission(&grant.credential, &grant.resource, grant.permission)? {
+            return Ok(());
+        }
+
+        // Any grant implies global read (to list projects) and grant write (to create project) permission
+        let mut global_grant = grant.clone();
+        global_grant.resource = Resource::Global;
+        global_grant.permission = Permission::Read;
+        self.do_grant_permission(&global_grant).await?;
+        global_grant.permission = Permission::Write;
+        self.do_grant_permission(&global_grant).await?;
+
+        let mut grant = grant.clone();
+
+        // Resolve corresponding project id from the input resource
+        grant.resource = self.to_named_entity_resource(&grant.resource)?;
+
+        // Record permission granting info to the external storages
+        for storage in self.external_storage.iter() {
+            storage.write().await.grant_permission(&grant).await?;
+        }
+
+        grant.resource = self.to_entity_resource(&grant.resource)?;
+
+        // Update local data structure
+        self.permission_map.grant_permission(&grant);
+        Ok(())
+    }
+
+    async fn revoke_permission(&mut self, revoke: &RbacRecord) -> Result<(), RegistryError> {
+        // User `revoked_by` must have the permission to grant the permission
+        if !self.check_permission(&revoke.requestor, &revoke.resource, Permission::Admin)? {
+            return Err(RbacError::PermissionDenied(
+                revoke.requestor.to_string(),
+                revoke.resource.to_owned(),
+                revoke.permission,
+            )
+            .into());
+        }
+
+        // Permission not granted, no need to do anything
+        if !self.check_permission(&revoke.credential, &revoke.resource, revoke.permission)? {
+            return Ok(());
+        }
+
+        let mut revoke = revoke.clone();
+
+        // Always use name as resource in the external storage
+        revoke.resource = self.to_named_entity_resource(&revoke.resource)?;
+
+        revoke.resource = self.to_entity_resource(&revoke.resource)?;
+
+        // Record permission revoking info to the external storages
+        for storage in self.external_storage.iter() {
+            storage.write().await.revoke_permission(&revoke).await?;
+        }
+
+        // Update local data structure
+        self.permission_map.revoke_permission(&revoke);
+        Ok(())
     }
 }

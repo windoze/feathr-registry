@@ -16,6 +16,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::fts::{FtsError, FtsIndex};
+use crate::rbac_map::RbacMap;
 
 const NODE_CAPACITY: usize = 1000;
 
@@ -80,6 +81,10 @@ where
         edge_type: EdgeType,
         edge_id: Uuid,
     ) -> Result<(), RegistryError>;
+
+    async fn grant_permission(&mut self, grant: &RbacRecord) -> Result<(), RegistryError>;
+
+    async fn revoke_permission(&mut self, revoke: &RbacRecord) -> Result<(), RegistryError>;
 }
 
 #[derive(Debug)]
@@ -105,6 +110,8 @@ where
     // FTS support
     pub(crate) fts_index: FtsIndex,
 
+    pub(crate) permission_map: RbacMap,
+
     // TODO:
     pub external_storage: Vec<Arc<RwLock<dyn ExternalStorage<EntityProp>>>>,
 }
@@ -121,6 +128,7 @@ where
             deleted: Default::default(),
             entry_points: Default::default(),
             fts_index: Default::default(),
+            permission_map: Default::default(),
             external_storage: Default::default(),
         }
     }
@@ -142,6 +150,7 @@ where
     pub fn from_content(
         graph: Graph<Entity<EntityProp>, Edge, Directed>,
         deleted: HashSet<Uuid>,
+        permissions: Vec<RbacRecord>,
     ) -> Self {
         let fts_index = FtsIndex::new();
         let node_id_map = graph
@@ -171,6 +180,7 @@ where
             deleted,
             entry_points,
             fts_index,
+            permission_map: Default::default(),
             external_storage: Default::default(),
         };
         let ids: Vec<_> = ret.node_id_map.keys().copied().collect();
@@ -180,6 +190,7 @@ where
         });
         ret.fts_index.commit().ok();
 
+        ret.load_permissions(permissions.into_iter()).ok();
         ret
     }
 }
@@ -197,6 +208,7 @@ where
             deleted: Default::default(),
             entry_points: Default::default(),
             fts_index: FtsIndex::new(),
+            permission_map: Default::default(),
             external_storage: Default::default(),
         }
     }
@@ -257,10 +269,15 @@ where
         Ok(())
     }
 
-    pub(crate) async fn load<NI, EI>(entities: NI, edges: EI) -> Result<Self, RegistryError>
+    pub(crate) async fn load<NI, EI, RI>(
+        entities: NI,
+        edges: EI,
+        permissions: RI,
+    ) -> Result<Self, RegistryError>
     where
         NI: Iterator<Item = Entity<EntityProp>>,
         EI: Iterator<Item = Edge>,
+        RI: Iterator<Item = RbacRecord>,
     {
         let mut ret = Self {
             graph: Graph::with_capacity(NODE_CAPACITY * 10, NODE_CAPACITY),
@@ -269,9 +286,11 @@ where
             deleted: HashSet::with_capacity(NODE_CAPACITY),
             entry_points: Vec::with_capacity(NODE_CAPACITY),
             fts_index: FtsIndex::new(),
+            permission_map: Default::default(),
             external_storage: Default::default(),
         };
         ret.batch_load(entities, edges).await?;
+        ret.load_permissions(permissions)?;
 
         Ok(ret)
     }
@@ -763,6 +782,67 @@ where
             },
         )
     }
+
+    pub(crate) fn to_entity_resource(&self, r: &Resource) -> Result<Resource, RegistryError> {
+        Ok(match &r {
+            Resource::NamedEntity(name) => {
+                let id = self.get_entity_id(name)?;
+                let proj_id = self.get_entity_project_id(id)?;
+                Resource::Entity(proj_id)
+            }
+            Resource::Entity(id) => {
+                let proj_id = self.get_entity_project_id(*id)?;
+                Resource::Entity(proj_id)
+            }
+            Resource::Global => Resource::Global,
+        })
+    }
+
+    pub(crate) fn to_named_entity_resource(&self, r: &Resource) -> Result<Resource, RegistryError> {
+        Ok(match &r {
+            Resource::NamedEntity(name) => {
+                let id = self.get_entity_id(name)?;
+                let proj_id = self.get_entity_project_id(id)?;
+                let proj_name = self
+                    .get_entity_by_id(proj_id)
+                    .ok_or_else(|| RegistryError::EntityNotFound(proj_id.to_string()))?
+                    .name;
+                Resource::NamedEntity(proj_name)
+            }
+            Resource::Entity(id) => {
+                let proj_id = self.get_entity_project_id(*id)?;
+                let proj_name = self
+                    .get_entity_by_id(proj_id)
+                    .ok_or_else(|| RegistryError::EntityNotFound(proj_id.to_string()))?
+                    .name;
+                Resource::NamedEntity(proj_name)
+            }
+            Resource::Global => Resource::Global,
+        })
+    }
+
+    pub(crate) async fn do_grant_permission(&mut self, grant: &RbacRecord) -> Result<(), RegistryError> {
+        // Permission already granted, no need to do anything
+        if self.check_permission(&grant.credential, &grant.resource, grant.permission)? {
+            return Ok(());
+        }
+
+        let mut grant = grant.clone();
+
+        // Resolve corresponding project id from the input resource
+        grant.resource = self.to_named_entity_resource(&grant.resource)?;
+
+        // Record permission granting info to the external storages
+        for storage in self.external_storage.iter() {
+            storage.write().await.grant_permission(&grant).await?;
+        }
+
+        grant.resource = self.to_entity_resource(&grant.resource)?;
+
+        // Update local data structure
+        self.permission_map.grant_permission(&grant);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -773,8 +853,6 @@ mod tests {
     use rand::Rng;
     use registry_provider::*;
     use uuid::Uuid;
-
-    use crate::mock::load;
 
     use super::*;
 
@@ -864,6 +942,14 @@ mod tests {
                 "Deleting edge: '{}' '{:?}' '{}'",
                 from.name, edge_type, to.name
             );
+            Ok(())
+        }
+
+        async fn grant_permission(&mut self, _grant: &RbacRecord) -> Result<(), RegistryError> {
+            Ok(())
+        }
+
+        async fn revoke_permission(&mut self, _revoke: &RbacRecord) -> Result<(), RegistryError> {
             Ok(())
         }
     }
@@ -1130,7 +1216,7 @@ mod tests {
         let mut names: Vec<String> = r
             .get_features_by_project("project1")
             .into_iter()
-            .map(|n| n.name.clone())
+            .map(|n| n.name)
             .collect();
         names.sort();
         assert_eq!(
@@ -1148,7 +1234,7 @@ mod tests {
         let mut names: Vec<String> = r
             .get_features_by_project("project2")
             .into_iter()
-            .map(|n| n.name.clone())
+            .map(|n| n.name)
             .collect();
         names.sort();
         assert_eq!(
@@ -1173,7 +1259,7 @@ mod tests {
         let (entities, edges) = r.get_feature_upstream(df2, None).unwrap();
         let mut upstream_names: Vec<String> = entities
             .into_iter()
-            .map(|w| format!("{}", w.name))
+            .map(|w| w.name)
             .collect();
         upstream_names.sort();
         assert_eq!(
@@ -1330,41 +1416,5 @@ mod tests {
 
         // Now only edges between project1 and source1 remain
         assert_eq!(r.graph.edge_count(), 2);
-    }
-
-    #[tokio::test]
-    async fn test_load() {
-        let r = load().await;
-
-        let uid = r
-            .get_entity_by_name(
-                "feathr_ci_registry_12_33_182947__f_trip_time_distance",
-                None,
-            )
-            .unwrap()
-            .id;
-        assert_eq!(
-            uid,
-            Uuid::parse_str("226b42ee-0c34-4329-b935-744aecc63fb4").unwrap()
-        );
-
-        let (f, e) = r.get_feature_upstream(uid, None).unwrap();
-        println!("{:#?}\n{:#?}", f, e);
-    }
-
-    #[tokio::test]
-    async fn test_dump() {
-        let r = load().await;
-        r.graph.node_weights().for_each(|w| {
-            println!(
-                "insert into entities (entity_id, entity_content) values ('{}', '{}');",
-                w.id,
-                serde_json::to_string(&w.properties).unwrap()
-            );
-        });
-        println!("-----------------------------");
-        r.graph.edge_weights().for_each(|w| {
-            println!("insert into edges (edge_id, from_id, to_id, edge_type) values ('{}', '{}', '{}', '{:?}');", Uuid::new_v4(), w.from, w.to, w.edge_type);
-        });
     }
 }
