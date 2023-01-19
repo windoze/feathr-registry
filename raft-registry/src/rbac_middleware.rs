@@ -64,8 +64,7 @@ impl<E: Endpoint> Endpoint for RbacMiddlewareImpl<E> {
     type Output = E::Output;
 
     async fn call(&self, mut req: Request) -> Result<Self::Output> {
-        // if std::env::var("ENABLE_RBAC").unwrap_or_default().is_empty() {
-        if true {
+        if std::env::var("ENABLE_RBAC").unwrap_or_default().is_empty() {
             req.extensions_mut().insert(Credential::RbacDisabled);
         } else if std::env::var("FEATHR_ENABLE_RBAC_DEBUG_MUST_NOT_USE_IN_PROD").unwrap_or_default()
             == "feathr_rbac_debug_enabled"
